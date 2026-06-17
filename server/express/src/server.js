@@ -3,7 +3,7 @@
 import express from 'express';
 import 'path';
 import cookieParser from 'cookie-parser';
-import acceptPageRequest, { getStats, getPersonas } from './acceptPageRequest.js';
+import acceptPageRequest, { getStats, getPersonas, loadPersonasFromDatabase } from './acceptPageRequest.js';
 import { openSession, getSession } from './openSession.js';
 import { constants } from '../constants.js';
 
@@ -38,6 +38,10 @@ server.get('/session/:sessionId', (req, res) => {
 // Persona management endpoints
 server.get('/personas/stats', getStats.get);
 server.get('/personas', getPersonas.get);
+server.post('/personas/reload', (req, res) => {
+	loadPersonasFromDatabase();
+	res.json({ message: 'Personas reloaded from database', timestamp: Date.now() });
+});
 
 // Health check
 server.get('/health', (req, res) => {

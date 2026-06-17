@@ -12,6 +12,35 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // Persistent storage for personas (in server/data directory)
 const STORAGE_FILE = join(__dirname, 'server/data', '.googletine-db.json');
 
+// Server configuration
+const SERVER_URL = process.env.GOOGLETINE_SERVER_URL || 'http://localhost:7000';
+
+// Verbosity configuration storage
+const CONFIG_FILE = join(__dirname, '.googletine-config.json');
+
+// Load or create config
+const loadConfig = () => {
+	if (existsSync(CONFIG_FILE)) {
+		try {
+			return JSON.parse(readFileSync(CONFIG_FILE, 'utf8'));
+		} catch (err) {
+			console.error('Error loading config:', err.message);
+		}
+	}
+	return { verbosity: 'titles' };
+};
+
+// Save config
+const saveConfig = (config) => {
+	writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
+};
+
+// Get current verbosity
+const getVerbosity = () => {
+	const config = loadConfig();
+	return config.verbosity || 'titles';
+};
+
 // Load personas from storage
 const loadPersonas = () => {
 	if (existsSync(STORAGE_FILE)) {
@@ -61,7 +90,7 @@ const createManagerFromStorage = (provider) => {
 				persona = new TwitterPersona(personaData);
 				break;
 			default:
-				persona = new YouTubePersona(personaData); // fallback
+				persona = new YouTubePersona(personaData);
 		}
 		manager.personas.set(persona.id, persona);
 	}
@@ -71,16 +100,12 @@ const createManagerFromStorage = (provider) => {
 
 // Save a manager's personas to storage
 const saveManagerPersonas = (manager) => {
-	// Get all existing personas
-	let allPersonas = loadPersonas();
-
-	// Remove personas for this provider
+	const allPersonas = loadPersonas();
 	const provider = manager.providerId;
-	allPersonas = allPersonas.filter(p => p.provider !== provider);
+	const filteredPersonas = allPersonas.filter(p => p.provider !== provider);
 
-	// Add current personas
 	for (const persona of manager.personas.values()) {
-		allPersonas.push({
+		filteredPersonas.push({
 			id: persona.id,
 			provider: persona.provider,
 			name: persona.name,
@@ -93,7 +118,7 @@ const saveManagerPersonas = (manager) => {
 		});
 	}
 
-	savePersonas(allPersonas);
+	savePersonas(filteredPersonas);
 };
 
 // Create a new persona by making a search request
@@ -107,12 +132,8 @@ const createPersona = async (provider, searchTerm, name) => {
 	console.log(`Creating ${provider} persona for search: "${searchTerm}"`);
 
 	try {
-		// Create a new persona
-		const persona = manager.createPersona({
-			name: name || searchTerm
-		});
+		const persona = manager.createPersona({ name: name || searchTerm });
 
-		// Determine search URL based on provider
 		let searchUrl;
 		switch (provider) {
 			case 'youtube':
@@ -126,9 +147,7 @@ const createPersona = async (provider, searchTerm, name) => {
 				return false;
 		}
 
-		// Make the search request to initialize the persona's cookies
 		console.log(`Fetching: ${searchUrl}`);
-
 		const headers = persona.getRequestHeaders();
 		const response = await fetch(searchUrl, { headers });
 
@@ -137,20 +156,15 @@ const createPersona = async (provider, searchTerm, name) => {
 			return false;
 		}
 
-		// Update persona with response cookies
 		manager.updatePersona(persona.id, response, new URL(searchUrl).hostname);
-
-		// Save updated personas
 		saveManagerPersonas(manager);
 
-		// Display results
 		console.log(`\n✓ Persona created successfully!`);
 		console.log(`  ID: ${persona.id}`);
 		console.log(`  Name: ${name || searchTerm}`);
 		console.log(`  Provider: ${provider}`);
 		console.log(`  Cookies received: ${persona.cookies.size}`);
 
-		// Show key cookies
 		if (provider === 'youtube') {
 			const cookieStatus = persona.getYouTubeCookieStatus();
 			console.log(`  Key cookies:`);
@@ -162,11 +176,33 @@ const createPersona = async (provider, searchTerm, name) => {
 			}
 		}
 
-		return true;
+		// Reload server to pick up new persona
+		await reloadServerPersonas();
 
+		return true;
 	} catch (err) {
 		console.error(`Error creating persona: ${err.message}`);
 		return false;
+	}
+};
+
+// Reload server's persona database
+const reloadServerPersonas = async () => {
+	try {
+		console.log('Reloading server personas...');
+		const response = await fetch(`${SERVER_URL}/personas/reload`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' }
+		});
+
+		if (response.ok) {
+			const result = await response.json();
+			console.log(`✓ ${result.message}`);
+		} else {
+			console.log(`Note: Server may not be running (got ${response.status})`);
+		}
+	} catch (err) {
+		console.log(`Note: Server may not be running (${err.message})`);
 	}
 };
 
@@ -178,7 +214,6 @@ const listPersonas = (provider, personaId) => {
 		const providerPersonas = personas.filter(p => p.provider === provider);
 
 		if (personaId) {
-			// List specific persona
 			const persona = providerPersonas.find(p => p.id === personaId);
 			if (!persona) {
 				console.error(`Persona not found: ${personaId}`);
@@ -195,7 +230,6 @@ const listPersonas = (provider, personaId) => {
 			console.log(`  Requests: ${persona.requestCount}`);
 			console.log(`  Cookies: ${persona.cookies.length}`);
 
-			// Show cookies
 			if (persona.cookies.length > 0) {
 				console.log(`\n  Cookies:`);
 				for (const [key, cookie] of persona.cookies) {
@@ -204,7 +238,6 @@ const listPersonas = (provider, personaId) => {
 				}
 			}
 		} else {
-			// List all personas for provider
 			if (providerPersonas.length === 0) {
 				console.log(`No personas found for provider: ${provider}`);
 				return;
@@ -223,7 +256,6 @@ const listPersonas = (provider, personaId) => {
 			}
 		}
 	} else {
-		// List all providers
 		const providers = [...new Set(personas.map(p => p.provider))];
 
 		if (providers.length === 0) {
@@ -245,9 +277,8 @@ const listPersonas = (provider, personaId) => {
 };
 
 // Delete a persona
-const deletePersona = (provider, personaId) => {
-	let allPersonas = loadPersonas();
-
+const deletePersona = async (provider, personaId) => {
+	const allPersonas = loadPersonas();
 	const personaIndex = allPersonas.findIndex(p => p.provider === provider && p.id === personaId);
 
 	if (personaIndex === -1) {
@@ -259,6 +290,9 @@ const deletePersona = (provider, personaId) => {
 	savePersonas(allPersonas);
 
 	console.log(`✓ Deleted persona: ${personaId}`);
+
+	// Reload server to pick up deletion
+	await reloadServerPersonas();
 };
 
 // Show stats
@@ -299,10 +333,220 @@ const showStats = (provider) => {
 	}
 };
 
+// Extract video titles from YouTube HTML
+const extractYouTubeTitles = (html) => {
+	const titles = [];
+	const ytDataMatch = html.match(/var ytInitialData = ({.+?});<\/script>/);
+
+	if (!ytDataMatch) return titles;
+
+	try {
+		const ytData = JSON.parse(ytDataMatch[1]);
+		const contents = ytData?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents;
+
+		if (!contents) return titles;
+
+		const findTitles = (obj, depth = 0) => {
+			if (depth > 10) return;
+			if (Array.isArray(obj)) {
+				for (const item of obj) {
+					findTitles(item, depth + 1);
+				}
+			} else if (obj && typeof obj === 'object') {
+				if (obj.title?.runs) {
+					for (const run of obj.title.runs) {
+						if (run.text && typeof run.text === 'string' && run.text.length > 10) {
+							if (!titles.includes(run.text)) {
+								titles.push(run.text);
+							}
+						}
+					}
+				}
+				for (const value of Object.values(obj)) {
+					findTitles(value, depth + 1);
+				}
+			}
+		};
+
+		findTitles(contents);
+	} catch (e) {
+		// Silently fail
+	}
+
+	return titles;
+};
+
+// Make a request using a specific persona via the running server
+const makeRequest = async (provider, personaId, searchTerm) => {
+	const personas = loadPersonas();
+	const persona = personas.find(p => p.provider === provider && p.id === personaId);
+
+	if (!persona) {
+		console.error(`Persona not found: ${personaId}`);
+		console.error(`Use 'list ${provider}' to see available personas`);
+		return false;
+	}
+
+	const verbosity = getVerbosity();
+	console.log(`Making ${provider} request using persona: ${persona.name || persona.id}`);
+	console.log(`Search term: "${searchTerm}"`);
+	console.log(`Verbosity: ${verbosity}`);
+	console.log(`Connecting to server: ${SERVER_URL}\n`);
+
+	try {
+		let searchUrl;
+		switch (provider) {
+			case 'youtube':
+				searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(searchTerm)}`;
+				break;
+			case 'twitter':
+				searchUrl = `https://twitter.com/search?q=${encodeURIComponent(searchTerm)}`;
+				break;
+			default:
+				console.error(`No search URL configured for provider: ${provider}`);
+				return false;
+		}
+
+		const response = await fetch(`${SERVER_URL}/request`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				url: searchUrl,
+				payment: { success: true, transactionId: `cli-${Date.now()}`, amount: 1000 },
+				personaId: personaId
+			})
+		});
+
+		if (!response.ok) {
+			if (response.status === 402) {
+				console.error(`Payment required (402) - server may not be running or payment validation failed`);
+				return false;
+			}
+			console.error(`Request failed: ${response.status} ${response.statusText}`);
+			return false;
+		}
+
+		const text = await response.text();
+
+		switch (verbosity) {
+			case 'titles':
+				console.log(`\n📺 Video Titles:`);
+				const titles = extractYouTubeTitles(text);
+				if (titles.length === 0) {
+					console.log('  No titles found');
+				} else {
+					titles.slice(0, 20).forEach((title, i) => {
+						console.log(`  ${i + 1}. ${title}`);
+					});
+					if (titles.length > 20) {
+						console.log(`  ... and ${titles.length - 20} more`);
+					}
+				}
+				break;
+
+			case 'html':
+				console.log(`\n📄 HTML Response (${text.length} bytes):`);
+				console.log(text.substring(0, 2000));
+				if (text.length > 2000) {
+					console.log(`\n... (${text.length - 2000} more bytes)`);
+				}
+				break;
+
+			case 'full':
+				console.log(`\n📄 Full HTML Response (${text.length} bytes):`);
+				console.log(text);
+				break;
+
+			case 'stats':
+				console.log(`\n📊 Response Statistics:`);
+				console.log(`  Size: ${text.length} bytes`);
+				console.log(`  Lines: ${text.split('\n').length}`);
+				const titlesCount = extractYouTubeTitles(text).length;
+				console.log(`  Titles found: ${titlesCount}`);
+				console.log(`  Preview: ${text.substring(0, 100)}...`);
+				break;
+
+			case 'json':
+				const ytDataMatch = text.match(/var ytInitialData = ({.+?});<\/script>/);
+				if (ytDataMatch) {
+					try {
+						const ytData = JSON.parse(ytDataMatch[1]);
+						console.log(`\n📋 YouTube Data (JSON):`);
+						console.log(JSON.stringify(ytData, null, 2).substring(0, 3000));
+						if (JSON.stringify(ytData).length > 3000) {
+							console.log(`\n... (truncated)`);
+						}
+					} catch (e) {
+						console.log('Could not parse YouTube data');
+					}
+				} else {
+					console.log('No structured data found in response');
+				}
+				break;
+
+			default:
+				console.log(`Unknown verbosity: ${verbosity}`);
+				return false;
+		}
+
+		persona.lastUsed = Date.now();
+		persona.requestCount = (persona.requestCount || 0) + 1;
+		saveManagerPersonas(createManagerFromStorage(provider));
+
+		console.log(`\n✓ Request completed successfully`);
+		console.log(`  Response size: ${text.length} bytes`);
+		console.log(`  Persona ${persona.name || persona.id} now has ${persona.requestCount} requests`);
+
+		return true;
+
+	} catch (err) {
+		console.error(`Error making request: ${err.message}`);
+		if (err.message.includes('ECONNREFUSED')) {
+			console.error(`\nIs the server running? Start it with: npm run start-server`);
+		}
+		return false;
+	}
+};
+
+// Show or change configuration
+const configCommand = (key, value) => {
+	const config = loadConfig();
+
+	if (!key) {
+		console.log('\n📋 Current Configuration:\n');
+		console.log(`  verbosity: ${config.verbosity}`);
+		console.log(`  server: ${SERVER_URL}`);
+		console.log('\nVerbosity levels:');
+		console.log('  - titles   : Show video titles (default)');
+		console.log('  - html     : Show HTML preview (2KB)');
+		console.log('  - full     : Show full HTML response');
+		console.log('  - stats    : Show response statistics');
+		console.log('  - json     : Show structured YouTube data');
+		console.log('\nUsage: npm run persona -- config <key> <value>');
+		console.log('Example: npm run persona -- config verbosity json');
+		return;
+	}
+
+	if (key === 'verbosity') {
+		const validLevels = ['titles', 'html', 'full', 'stats', 'json'];
+		if (!value || !validLevels.includes(value)) {
+			console.error(`Invalid verbosity level: ${value || '(empty)'}`);
+			console.error(`Valid levels: ${validLevels.join(', ')}`);
+			return;
+		}
+		config.verbosity = value;
+		saveConfig(config);
+		console.log(`✓ Verbosity set to: ${value}`);
+	} else {
+		console.error(`Unknown config key: ${key}`);
+		console.error(`Supported keys: verbosity`);
+	}
+};
+
 // Show help
 const showHelp = () => {
 	console.log(`
-Googletine CLI - Persona Management
+Googletine CLI - Persona Management & Request Proxy
 
 Commands:
   create <provider> <search-term> [name]
@@ -314,6 +558,15 @@ Commands:
       List personas. If provider is given, lists personas for that provider.
       If persona-id is also given, shows details for that specific persona.
 
+  request <provider> <persona-id> <search-term>
+      Make a search request using a specific persona via the running server.
+      Requires: npm run start-server (or server must be running)
+
+  config [key] [value]
+      View or change configuration.
+      Keys: verbosity (titles|html|full|stats|json)
+      Example: npm run persona -- config verbosity json
+
   delete <provider> <persona-id>
       Delete a specific persona
 
@@ -323,10 +576,18 @@ Commands:
   help
       Show this help message
 
+Verbosity Levels (for request command):
+  titles   - Show video titles (default)
+  html     - Show HTML preview (2KB)
+  full     - Show full HTML response
+  stats    - Show response statistics
+  json     - Show structured YouTube data
+
 Examples:
   npm run persona -- create youtube "pigs" "Pig Research"
   npm run persona -- list youtube
-  npm run persona -- list youtube persona-1234567890-abc
+  npm run persona -- request youtube persona-123 "funny cats"
+  npm run persona -- config verbosity json
   npm run persona -- delete youtube persona-1234567890-abc
   npm run persona -- stats youtube
 `);
@@ -356,12 +617,24 @@ const main = async () => {
 			listPersonas(args[1], args[2]);
 			break;
 
+		case 'request':
+			if (args.length < 4) {
+				console.error('Usage: request <provider> <persona-id> <search-term>');
+				return;
+			}
+			await makeRequest(args[1], args[2], args[3]);
+			break;
+
+		case 'config':
+			configCommand(args[1], args[2]);
+			break;
+
 		case 'delete':
 			if (args.length < 3) {
 				console.error('Usage: delete <provider> <persona-id>');
 				return;
 			}
-			deletePersona(args[1], args[2]);
+			await deletePersona(args[1], args[2]);
 			break;
 
 		case 'stats':

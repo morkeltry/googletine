@@ -3,6 +3,7 @@
 
 import { doPayment } from '../../../shared/payments/stub.js';
 import { isPaymentRequired, parsePaymentRequestHeaders, createPaymentHeaders } from '../../../shared/payments/headers.js';
+import { loadYouTubePersonas, getNextYouTubePersona, isYouTubeUrl } from './personas.js';
 import { constants } from '../constants.js';
 
 const { googletineNodes } = constants;
@@ -16,21 +17,34 @@ const getRemoteNode = () => {
 };
 
 // Process request with payment retry logic
-const processRequest = async (url, clientResponse) => {
+const processRequest = async (url, clientResponse, req) => {
 	const remoteNode = getRemoteNode();
 	const remoteUrl = `http://${remoteNode.nodeUrl}/request`;
 
 	console.log(`Forwarding request to ${remoteUrl} for URL: ${url}`);
 
+	// Check if this is a YouTube request and we have personas to use
+	// Note: By default we DON'T send personaId - let server pick one
+	// Only send personaId if explicitly requested (for testing)
+	const usePersonaParam = req.query.use_persona;
+
 	try {
 		// First attempt: request without payment
+		const requestBody = { url };
+		if (usePersonaParam === 'true' && isYouTubeUrl(url) && youtubePersonas.length > 0) {
+			const persona = getNextYouTubePersona();
+			if (persona) {
+				requestBody.personaId = persona.id;
+			}
+		}
+
 		const response = await fetch(remoteUrl, {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
 				'X-Session-Id': `client-${Date.now()}`
 			},
-			body: JSON.stringify({ url })
+			body: JSON.stringify(requestBody)
 		});
 
 		// Check if payment is required
@@ -70,7 +84,8 @@ const processRequest = async (url, clientResponse) => {
 				},
 				body: JSON.stringify({
 					url,
-					payment: paymentResult
+					payment: paymentResult,
+					personaId: personaId
 				})
 			});
 
@@ -113,7 +128,7 @@ const forwardRequest = {
 		}
 
 		console.log(`Received request for URL: ${url}`);
-		await processRequest(url, clientResponse);
+		await processRequest(url, clientResponse, req);
 	}
 };
 

@@ -4,7 +4,7 @@ const constants = {
 	// Remote googletine servers to use
 	googletineNodes: [
 		{
-			nodeUrl: '127.0.0.1:7000',
+			nodeUrl: 'localhost:7000',
 			nodeName: 'local-dev'
 		}
 	],

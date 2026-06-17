@@ -3,16 +3,52 @@
 
 import { requestPayment, receivePayment } from '../../../shared/payments/stub.js';
 import { createPaymentRequestHeaders, parsePaymentHeaders } from '../../../shared/payments/headers.js';
-import { YouTubePersonaManager } from '../../../shared/providers/youtube.js';
+import { YouTubePersona, YouTubePersonaManager } from '../../../shared/providers/youtube.js';
 import { constants } from '../constants.js';
+import { readFileSync, existsSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const { siteCookies } = constants;
 
 // Initialize YouTube persona manager
 const youtubeManager = new YouTubePersonaManager({
 	maxPersonas: 10,
-	rotationStrategy: 'round-robin' // or 'random', 'least-recently-used'
+	rotationStrategy: 'round-robin'
 });
+
+// Load personas from database
+const loadPersonasFromDatabase = () => {
+	const dbPath = join(__dirname, '../../data', '.googletine-db.json');
+	if (existsSync(dbPath)) {
+		try {
+			// Clear existing personas before loading
+			youtubeManager.personas.clear();
+
+			const data = JSON.parse(readFileSync(dbPath, 'utf8'));
+			const personas = data.personas || [];
+			const youtubePersonas = personas.filter(p => p.provider === 'youtube');
+
+			for (const personaData of youtubePersonas) {
+				const persona = new YouTubePersona(personaData);
+				youtubeManager.personas.set(persona.id, persona);
+			}
+
+			console.log(`Loaded ${youtubePersonas.length} YouTube personas from database`);
+		} catch (err) {
+			console.error('Error loading personas from database:', err.message);
+		}
+	} else {
+		// If database doesn't exist, clear personas
+		youtubeManager.personas.clear();
+		console.log('Database not found, cleared personas');
+	}
+};
+
+// Load personas on startup
+loadPersonasFromDatabase();
 
 // Modify response (placeholder for future functionality)
 const modifyResponse = (response) => {
@@ -49,7 +85,7 @@ const getFetchModifier = (url, persona) => {
 
 // Process request and handle payment flow
 const processRequest = async (req, res) => {
-	const { url, payment } = req.body || {};
+	const { url, payment, personaId } = req.body || {};
 	const sessionId = req.headers['x-session-id'] || null;
 
 	console.log(`Processing request for URL: ${url}`);
@@ -100,7 +136,18 @@ const processRequest = async (req, res) => {
 		let headers = {};
 
 		if (provider.includes('youtube.com')) {
-			persona = youtubeManager.getPersona();
+			// If personaId is provided, get that specific persona
+			if (personaId) {
+				persona = youtubeManager.getPersonaById(personaId);
+				if (!persona) {
+					console.error(`Persona not found: ${personaId}`);
+					res.status(404).send({ error: 'Persona not found' });
+					return;
+				}
+			} else {
+				// No personaId, get any available persona
+				persona = youtubeManager.getPersona();
+			}
 			console.log(`Using YouTube persona: ${persona.id} (request #${persona.requestCount + 1})`);
 			headers = persona.getRequestHeaders();
 		} else {
@@ -174,4 +221,4 @@ const getPersonas = {
 };
 
 export default acceptPageRequest;
-export { getStats, getPersonas, youtubeManager };
+export { getStats, getPersonas, youtubeManager, loadPersonasFromDatabase };

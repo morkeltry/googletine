@@ -22,7 +22,7 @@ export {
  * @param {object} options - Manager options
  * @returns {PersonaManager}
  */
-export function createPersonaManager(provider, options = {}) {
+export async function createPersonaManager(provider, options = {}) {
 	switch (provider.toLowerCase()) {
 		case 'youtube':
 		case 'www.youtube.com':
