@@ -1,6 +1,6 @@
 # Googletine
 
-Payment-based proxy system for circumventing loginwalls and paywalls.
+MPP-based proxy system for escaping your filter bubble!
 
 ## Overview
 
@@ -72,34 +72,95 @@ Client runs on port 6000 (configurable via `GOOGLETINE_CLIENT_PORT`).
 
 ### CLI Commands
 
-```bash
-# Show help
-npm run persona -- help
+#### Command Syntax
 
-# Create a new persona
-npm run persona -- create youtube "pigs" "Pig Research"
+```bash
+# Direct usage
+node guil-cli.js <command> [arguments...]
+
+# Via npm script
+npm run persona -- <command> [arguments...]
+```
+
+#### Available Commands
+
+**help** - Show help message
+```bash
+node guil-cli.js help
+```
+
+**create** - Create a new persona
+```bash
+node guil-cli.js create <provider> <search-term> [name]
+```
+- `<provider>` - Provider name: `youtube`, `twitter`
+- `<search-term>` - Search query to initialize persona
+- `[name]` - Optional persona name (defaults to search term)
+
+**list** - List personas
+```bash
+node guil-cli.js list [provider] [persona-id]
+```
+- `[provider]` - Optional provider filter (youtube, twitter)
+- `[persona-id]` - Optional specific persona ID to show details
+
+**request** - Make a test request using a persona
+```bash
+node guil-cli.js request <provider> <persona-id> <search-term>
+```
+- `<provider>` - Provider name: `youtube`, `twitter`
+- `<persona-id>` - Specific persona ID to use
+- `<search-term>` - Search query for the request
+
+**config** - View or change configuration
+```bash
+node guil-cli.js config [key] [value]
+```
+- `[key]` - Config key (currently only `verbosity`)
+- `[value]` - New value for the key
+
+**delete** - Delete a persona
+```bash
+node guil-cli.js delete <provider> <persona-id>
+```
+- `<provider>` - Provider name
+- `<persona-id>` - Persona ID to delete
+
+**stats** - Show statistics
+```bash
+node guil-cli.js stats [provider]
+```
+- `[provider]` - Optional provider filter
+
+#### Examples
+
+```bash
+# Create a YouTube persona
+node guil-cli.js create youtube "pigs" "Pig Research"
 
 # List all personas
-npm run persona -- list
+node guil-cli.js list
 
 # List YouTube personas
-npm run persona -- list youtube
+node guil-cli.js list youtube
 
-# Show persona details
-npm run persona -- list youtube <persona-id>
+# Show specific persona details
+node guil-cli.js list youtube persona-1781711823510-d7ytm25gr
 
 # Delete a persona
-npm run persona -- delete youtube <persona-id>
+node guil-cli.js delete youtube persona-1781711823510-d7ytm25gr
 
-# Make a test request using a persona
-npm run persona -- request youtube <persona-id> "<search-term>"
+# Make a test request
+node guil-cli.js request youtube persona-1781711823510-d7ytm25gr "funny cats"
 
-# View/change configuration
-npm run persona -- config
-npm run persona -- config verbosity json
+# Change verbosity to json
+node guil-cli.js config verbosity json
 
-# Show statistics
-npm run persona -- stats youtube
+# View current config
+node guil-cli.js config
+
+# Show statistics for YouTube
+node guil-cli.js stats youtube
 ```
 
 ### Verbosity Levels (for request command)
