@@ -13,10 +13,10 @@ Payment-based proxy node for circumventing loginwalls and paywalls.
 # Install dependencies
 npm install
 
-# Start server (port 7000)
+# Start server (port 7070)
 npm run start-server
 
-# Start client (port 6000)
+# Start client (port 6060)
 npm run start-client
 ```
 
@@ -24,13 +24,13 @@ npm run start-client
 
 ```bash
 # Test server health
-curl http://localhost:7000/health
+curl http://localhost:7070/health
 
 # Test client info
-curl http://localhost:6000/
+curl http://localhost:6060/
 
 # Test payment flow
-curl "http://localhost:6000/request?url=https://example.com"
+curl "http://localhost:6060/request?url=https://example.com"
 ```
 
 ## Payment Flow
@@ -51,5 +51,5 @@ The payment functions in `shared/payments/stub.js` are placeholders for MPP inte
 ## Configuration
 
 Environment variables:
-- `GOOGLETINE_SERVER_PORT` - Server port (default: 7000)
-- `GOOGLETINE_CLIENT_PORT` - Client port (default: 6000)
+- `GOOGLETINE_SERVER_PORT` - Server port (default: 7070)
+- `GOOGLETINE_CLIENT_PORT` - Client port (default: 6060)

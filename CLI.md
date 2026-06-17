@@ -60,7 +60,7 @@ npm install
 npm run start-server
 ```
 
-Server runs on port 7000 (configurable via `GOOGLETINE_SERVER_PORT`).
+Server runs on port 7070 (configurable via `GOOGLETINE_SERVER_PORT`).
 
 ### Start the Client
 
@@ -68,7 +68,7 @@ Server runs on port 7000 (configurable via `GOOGLETINE_SERVER_PORT`).
 npm run start-client
 ```
 
-Client runs on port 6000 (configurable via `GOOGLETINE_CLIENT_PORT`).
+Client runs on port 6060 (configurable via `GOOGLETINE_CLIENT_PORT`).
 
 ### CLI Commands
 
@@ -238,9 +238,9 @@ Tests cover:
 
 ### Environment Variables
 
-- `GOOGLETINE_SERVER_PORT` - Server port (default: 7000)
-- `GOOGLETINE_CLIENT_PORT` - Client port (default: 6000)
-- `GOOGLETINE_SERVER_URL` - Server URL for CLI (default: http://localhost:7000)
+- `GOOGLETINE_SERVER_PORT` - Server port (default: 7070)
+- `GOOGLETINE_CLIENT_PORT` - Client port (default: 6060)
+- `GOOGLETINE_SERVER_URL` - Server URL for CLI (default: http://localhost:7070)
 
 ### Configuration File
 

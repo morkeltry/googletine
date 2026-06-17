@@ -13,7 +13,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const STORAGE_FILE = join(__dirname, 'server/data', '.googletine-db.json');
 
 // Server configuration
-const SERVER_URL = process.env.GOOGLETINE_SERVER_URL || 'http://localhost:7000';
+const SERVER_URL = process.env.GOOGLETINE_SERVER_URL || 'http://localhost:7070';
 
 // Verbosity configuration storage
 const CONFIG_FILE = join(__dirname, '.googletine-config.json');

@@ -9,7 +9,7 @@ const log = (msg) => {
 
 const makeRequest = async (url, requestId) => {
 	try {
-		const response = await fetch('http://localhost:7000/request', {
+		const response = await fetch('http://localhost:7070/request', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
@@ -27,7 +27,7 @@ const makeRequest = async (url, requestId) => {
 
 const getStats = async () => {
 	try {
-		const response = await fetch('http://localhost:7000/personas/stats');
+		const response = await fetch('http://localhost:7070/personas/stats');
 		return await response.json();
 	} catch (err) {
 		return { error: err.message };
@@ -36,7 +36,7 @@ const getStats = async () => {
 
 const getPersonas = async () => {
 	try {
-		const response = await fetch('http://localhost:7000/personas');
+		const response = await fetch('http://localhost:7070/personas');
 		return await response.json();
 	} catch (err) {
 		return { error: err.message };

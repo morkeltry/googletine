@@ -19,7 +19,7 @@ const constants = {
 	},
 
 	// Server configuration
-	port: process.env.GOOGLETINE_SERVER_PORT || 7000,
+	port: process.env.GOOGLETINE_SERVER_PORT || 7070,
 
 	// Pricing configuration (can be overridden)
 	basePrice: 1000,

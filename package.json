@@ -16,6 +16,9 @@
     "start-client": "node client/express/src/index.js",
     "watch-server": "nodemon --signal SIGHUP server/express/src/index.js",
     "watch-client": "nodemon --signal SIGHUP client/express/src/index.js",
+    "stop": "pkill -f 'server/express/src/index.js' && pkill -f 'client/express/src/index.js'",
+    "stop-server": "pkill -f 'server/express/src/index.js'",
+    "stop-client": "pkill -f 'client/express/src/index.js'",
     "persona": "node guil-cli.js",
     "test": "node test-cli.js",
     "test:cli": "node test-cli.js"
