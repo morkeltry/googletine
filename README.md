@@ -20,18 +20,111 @@ npm run start-server
 npm run start-client
 ```
 
-## Testing
+## API Endpoints
+
+### Client Endpoints (Port 6060)
+
+The client forwards requests to the server and handles the payment flow.
+
+#### Transparent GET Requests (Copy-Paste Friendly)
+
+You can copy a URL from your browser and paste it directly after `/request/`:
 
 ```bash
-# Test server health
+# Copy and paste format - no encoding needed!
+curl http://localhost:6060/request/youtube.com/watch?v=dQw4w9WgXcQ
+
+# With https:// prefix
+curl http://localhost:6060/request/https://youtube.com/watch?v=dQw4w9WgXcQ
+
+# With persona parameter (gets stripped before forwarding)
+curl http://localhost:6060/request/youtube.com/watch?v=123&persona=my-persona-id
+
+# With use_persona parameter
+curl http://localhost:6060/request/youtube.com?use_persona=true
+```
+
+#### Query String Format
+
+```bash
+# URL as query parameter
+curl "http://localhost:6060/request?url=https://youtube.com"
+
+# With persona
+curl "http://localhost:6060/request?url=https://youtube.com&persona=my-id"
+```
+
+#### Other Client Endpoints
+
+```bash
+# Health check
+curl http://localhost:6060/health
+
+# Info and available endpoints
+curl http://localhost:6060/
+```
+
+### Server Endpoints (Port 7070)
+
+The server accepts requests, validates payments, and serves content.
+
+#### GET Requests
+
+```bash
+# Direct URL path (most transparent)
+curl http://localhost:7070/request/youtube.com
+
+# With query string
+curl "http://localhost:7070/request?url=https://youtube.com"
+
+# With persona parameter
+curl "http://localhost:7070/request?url=https://youtube.com&persona=persona-123"
+```
+
+#### POST Requests (Original Format)
+
+```bash
+curl -X POST http://localhost:7070/request \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://www.youtube.com/results?search_query=pigs",
+    "payment": {
+      "success": true,
+      "transactionId": "test-1234567890",
+      "amount": 1000
+    },
+    "personaId": "persona-1781711823510-d7ytm25gr"
+  }'
+```
+
+#### Other Server Endpoints
+
+```bash
+# Health check and endpoint list
 curl http://localhost:7070/health
 
-# Test client info
-curl http://localhost:6060/
+# List all loaded personas
+curl http://localhost:7070/personas
 
-# Test payment flow
-curl "http://localhost:6060/request?url=https://example.com"
+# Show server statistics
+curl http://localhost:7070/personas/stats
+
+# Reload personas from database
+curl -X POST http://localhost:7070/personas/reload
+
+# Session management
+curl http://localhost:7070/session
+curl http://localhost:7070/session/session-id-here
 ```
+
+### Local Parameters
+
+When using GET requests, these parameters are handled locally and stripped before proxying to the destination:
+
+- `persona` - Specify which persona ID to use for the request
+- `use_persona` - Set to `true` to enable persona rotation (if configured)
+
+Example: `curl "http://localhost:6060/request/youtube.com?persona=my-id&use_persona=true"`
 
 ## Payment Flow
 
