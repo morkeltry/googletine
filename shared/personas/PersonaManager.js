@@ -28,15 +28,15 @@ export class PersonaManager {
 	/**
 	 * Get or create a persona for a request
 	 * @param {object} options - Options for persona selection
-	 * @returns {Persona}
+	 * @returns {Promise<Persona>}
 	 */
-	getPersona(options = {}) {
+	async getPersona(options = {}) {
 		// Filter active personas
 		const activePersonas = this.getActivePersonas();
 
 		if (activePersonas.length === 0) {
 			// No active personas, create a new one
-			return this.createPersona(options);
+			return await this.createPersona(options);
 		}
 
 		// Select persona based on rotation strategy

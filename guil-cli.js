@@ -132,7 +132,7 @@ const createPersona = async (provider, searchTerm, name) => {
 	console.log(`Creating ${provider} persona for search: "${searchTerm}"`);
 
 	try {
-		const persona = manager.createPersona({ name: name || searchTerm });
+		const persona = await manager.createPersona({ name: name || searchTerm });
 
 		let searchUrl;
 		switch (provider) {

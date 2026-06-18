@@ -111,10 +111,11 @@ export class YouTubePersonaManager extends PersonaManager {
 
 	/**
 	 * Create a new YouTube persona with initial setup
+	 * This makes an initial request to YouTube to accept terms and get proper cookies
 	 * @param {object} options - Persona options
-	 * @returns {YouTubePersona}
+	 * @returns {Promise<YouTubePersona>}
 	 */
-	createPersona(options = {}) {
+	async createPersona(options = {}) {
 		const persona = new YouTubePersona(options);
 
 		// Set initial consent cookie if not provided
@@ -130,7 +131,43 @@ export class YouTubePersonaManager extends PersonaManager {
 		this.personas.set(persona.id, persona);
 		this.stats.totalPersonasCreated++;
 
+		// Make initial request to YouTube to accept terms and get proper cookies
+		await this.initializePersona(persona);
+
 		return persona;
+	}
+
+	/**
+	 * Initialize a persona by making a request to YouTube to accept terms and get cookies
+	 * @param {YouTubePersona} persona - The persona to initialize
+	 */
+	async initializePersona(persona) {
+		try {
+			console.log(`Initializing persona ${persona.id} - accepting YouTube terms...`);
+
+			// Make a GET request to YouTube.com homepage
+			const youtubeUrl = 'https://www.youtube.com';
+			const headers = persona.getRequestHeaders();
+
+			const response = await fetch(youtubeUrl, { headers });
+
+			if (response.ok) {
+				// Update persona with cookies from the response
+				const setCookieHeaders = response.headers?.getSetCookie();
+				if (setCookieHeaders) {
+					persona.updateCookies(setCookieHeaders, 'www.youtube.com');
+				}
+
+				// Update YouTube-specific state
+				persona.updateYouTubeState();
+
+				console.log(`Persona ${persona.id} initialized with ${persona.cookies.size} cookies`);
+			} else {
+				console.warn(`Failed to initialize persona ${persona.id}: ${response.status}`);
+			}
+		} catch (error) {
+			console.error(`Error initializing persona ${persona.id}:`, error.message);
+		}
 	}
 
 	/**

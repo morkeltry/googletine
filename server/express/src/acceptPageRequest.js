@@ -473,7 +473,7 @@ const processRequest = async (req, res) => {
 				}
 			} else {
 				// No personaId, get any available persona
-				persona = youtubeManager.getPersona();
+				persona = await youtubeManager.getPersona();
 			}
 			console.log(`Using YouTube persona: ${persona.id} (request #${persona.requestCount + 1})`);
 
