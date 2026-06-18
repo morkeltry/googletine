@@ -12,6 +12,9 @@ const { port } = constants;
 
 server.set('port', process.env.GOOGLETINE_SERVER_PORT || port);
 
+// Disable automatic ETag generation for transparency
+server.disable('etag');
+
 // Middleware
 server.use(express.json());
 server.use(cookieParser());

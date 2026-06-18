@@ -500,6 +500,10 @@ const processRequest = async (req, res) => {
 		const fetchModifier = getFetchModifier(url, persona);
 		headers = { ...headers, ...fetchModifier.headers };
 
+		// Disable compression to avoid decompression issues with streaming
+		// This allows us to stream responses more reliably
+		headers['Accept-Encoding'] = 'identity';
+
 		// Fetch the URL with persona headers
 		const fullResponse = await fetch(url, { headers }).then(modifyResponse);
 
@@ -518,13 +522,23 @@ const processRequest = async (req, res) => {
 		}
 
 		// Stream response to client
-		const arrayBuffer = await fullResponse.arrayBuffer();
-
 		// Forward all response headers except identifying ones
 		forwardResponseHeaders(fullResponse, res);
 
-		res.status(200);
-		res.send(Buffer.from(arrayBuffer));
+		res.status(fullResponse.status);
+
+		// Stream the response body instead of buffering
+		if (fullResponse.body) {
+			// Pipe the response body directly to the client response
+			for await (const chunk of fullResponse.body) {
+				res.write(chunk);
+			}
+			res.end();
+		} else {
+			// Fallback to arrayBuffer if body is not available
+			const arrayBuffer = await fullResponse.arrayBuffer();
+			res.send(Buffer.from(arrayBuffer));
+		}
 
 	} catch (err) {
 		console.error('ERROR fetching URL:', err);

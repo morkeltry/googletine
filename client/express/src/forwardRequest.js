@@ -191,25 +191,43 @@ const processRequest = async (url, clientResponse, req, useGet = false) => {
 			}
 
 			// Stream successful response to browser
-			const arrayBuffer = await retryResponse.arrayBuffer();
-
 			// Forward all headers except identifying ones (ETag, etc.)
 			forwardHeaders(retryResponse, clientResponse);
 
 			clientResponse.status(200);
-			clientResponse.send(Buffer.from(arrayBuffer));
+
+			// Stream the response body directly
+			if (retryResponse.body) {
+				for await (const chunk of retryResponse.body) {
+					clientResponse.write(chunk);
+				}
+				clientResponse.end();
+			} else {
+				// Fallback to buffering if body is not available
+				const arrayBuffer = await retryResponse.arrayBuffer();
+				clientResponse.send(Buffer.from(arrayBuffer));
+			}
 			return;
 		}
 
 		// No payment required - stream response to browser
 		if (response.ok) {
-			const arrayBuffer = await response.arrayBuffer();
-
 			// Forward all headers except identifying ones (ETag, etc.)
 			forwardHeaders(response, clientResponse);
 
 			clientResponse.status(response.status);
-			clientResponse.send(Buffer.from(arrayBuffer));
+
+			// Stream the response body directly
+			if (response.body) {
+				for await (const chunk of response.body) {
+					clientResponse.write(chunk);
+				}
+				clientResponse.end();
+			} else {
+				// Fallback to buffering if body is not available
+				const arrayBuffer = await response.arrayBuffer();
+				clientResponse.send(Buffer.from(arrayBuffer));
+			}
 		} else {
 			clientResponse.status(response.status).send({ error: 'Request failed' });
 		}
