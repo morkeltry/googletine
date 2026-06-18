@@ -25,6 +25,25 @@ server.use((req, res, next) => {
 
 // Routes
 server.post('/request', acceptPageRequest.post);
+server.get('/request', acceptPageRequest.get);
+
+// Transparent route: paste URL directly after /request/
+server.get('/request/*', (req, res) => {
+	// Extract URL from path (everything after /request/)
+	const urlPath = req.path.substring(9); // Remove '/request/'
+	const decodedUrl = decodeURIComponent(urlPath);
+
+	// Mock request object with URL in query
+	const mockReq = {
+		...req,
+		query: {
+			url: decodedUrl,
+			...req.query // Preserve any other query params like persona
+		}
+	};
+
+	acceptPageRequest.get(mockReq, res);
+});
 server.get('/session', openSession.get);
 server.get('/session/:sessionId', (req, res) => {
 	const session = getSession(req.params.sessionId);
@@ -45,7 +64,17 @@ server.post('/personas/reload', (req, res) => {
 
 // Health check
 server.get('/health', (req, res) => {
-	res.send({ status: 'ok', timestamp: Date.now() });
+	res.send({
+		status: 'ok',
+		timestamp: Date.now(),
+		endpoints: {
+			request: 'POST /request with JSON body {url, payment, personaId}',
+			request_get: 'GET /request?url=<url> or GET /request/<url>',
+			request_get_with_persona: 'GET /request/<url>?persona=<id>',
+			session: 'GET /session',
+			personas: 'GET /personas, GET /personas/stats'
+		}
+	});
 });
 
 export default server;

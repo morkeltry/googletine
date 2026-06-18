@@ -8,6 +8,9 @@ import { constants } from '../constants.js';
 
 const { googletineNodes } = constants;
 
+// Local parameters that should be stripped before proxying
+const LOCAL_PARAMS = ['persona', 'use_persona'];
+
 // Get preferred remote node (simple round-robin for now)
 let currentNodeIndex = 0;
 const getRemoteNode = () => {
@@ -16,36 +19,82 @@ const getRemoteNode = () => {
 	return node;
 };
 
+// Normalize URL - add https:// if missing
+const normalizeUrl = (url) => {
+	if (!url.startsWith('http://') && !url.startsWith('https://')) {
+		return 'https://' + url;
+	}
+	return url;
+};
+
+// Strip local parameters from URL querystring
+const stripLocalParams = (url) => {
+	try {
+		const urlObj = new URL(url);
+		LOCAL_PARAMS.forEach(param => {
+			urlObj.searchParams.delete(param);
+		});
+		return urlObj.toString();
+	} catch (e) {
+		return url;
+	}
+};
+
 // Process request with payment retry logic
-const processRequest = async (url, clientResponse, req) => {
+const processRequest = async (url, clientResponse, req, useGet = false) => {
 	const remoteNode = getRemoteNode();
 	const remoteUrl = `http://${remoteNode.nodeUrl}/request`;
 
-	console.log(`Forwarding request to ${remoteUrl} for URL: ${url}`);
+	// Normalize URL
+	const normalizedUrl = normalizeUrl(url);
+	console.log(`Forwarding request to ${remoteUrl} for URL: ${normalizedUrl}`);
 
-	// Check if this is a YouTube request and we have personas to use
-	// Note: By default we DON'T send personaId - let server pick one
-	// Only send personaId if explicitly requested (for testing)
-	const usePersonaParam = req.query.use_persona;
+	// Extract local parameters from original request
+	const personaParam = req.query.persona;
+	const usePersonaParam = req.query.use_persona === 'true';
 
 	try {
-		// First attempt: request without payment
-		const requestBody = { url };
-		if (usePersonaParam === 'true' && isYouTubeUrl(url) && youtubePersonas.length > 0) {
-			const persona = getNextYouTubePersona();
-			if (persona) {
-				requestBody.personaId = persona.id;
-			}
-		}
+		let response;
 
-		const response = await fetch(remoteUrl, {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				'X-Session-Id': `client-${Date.now()}`
-			},
-			body: JSON.stringify(requestBody)
-		});
+		if (useGet) {
+			// Forward as GET with querystring (transparent mode)
+			// Build querystring with URL and local params
+			const forwardParams = new URLSearchParams({ url: normalizedUrl });
+			if (personaParam) {
+				forwardParams.set('persona', personaParam);
+			}
+			if (usePersonaParam) {
+				forwardParams.set('use_persona', 'true');
+			}
+
+			const forwardUrl = `${remoteUrl}?${forwardParams.toString()}`;
+			console.log(`Forwarding as GET to: ${forwardUrl}`);
+
+			response = await fetch(forwardUrl, {
+				method: 'GET',
+				headers: {
+					'X-Session-Id': `client-${Date.now()}`
+				}
+			});
+		} else {
+			// Forward as POST (existing behavior)
+			const requestBody = { url: normalizedUrl };
+			if (usePersonaParam && isYouTubeUrl(normalizedUrl) && youtubePersonas.length > 0) {
+				const persona = getNextYouTubePersona();
+				if (persona) {
+					requestBody.personaId = persona.id;
+				}
+			}
+
+			response = await fetch(remoteUrl, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'X-Session-Id': `client-${Date.now()}`
+				},
+				body: JSON.stringify(requestBody)
+			});
+		}
 
 		// Check if payment is required
 		if (isPaymentRequired(response)) {
@@ -83,9 +132,9 @@ const processRequest = async (url, clientResponse, req) => {
 					...paymentHeaders
 				},
 				body: JSON.stringify({
-					url,
+					url: normalizedUrl,
 					payment: paymentResult,
-					personaId: personaId
+					personaId: personaParam
 				})
 			});
 
@@ -127,8 +176,9 @@ const forwardRequest = {
 			return;
 		}
 
-		console.log(`Received request for URL: ${url}`);
-		await processRequest(url, clientResponse, req);
+		console.log(`Received GET request for URL: ${url}`);
+		// Use GET forwarding for transparent mode
+		await processRequest(url, clientResponse, req, true);
 	}
 };
 

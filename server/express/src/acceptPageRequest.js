@@ -193,6 +193,85 @@ const processRequest = async (req, res) => {
 	}
 };
 
+// Local parameters that should be stripped before proxying
+const LOCAL_PARAMS = ['persona', 'use_persona'];
+
+// Strip local parameters from URL querystring
+const stripLocalParams = (url) => {
+	try {
+		const urlObj = new URL(url);
+		LOCAL_PARAMS.forEach(param => {
+			urlObj.searchParams.delete(param);
+		});
+		return urlObj.toString();
+	} catch (e) {
+		return url;
+	}
+};
+
+// Extract and normalize URL from various formats
+const extractUrl = (req) => {
+	// Try query parameter first
+	let url = req.query.url;
+
+	// If no url param, reconstruct from full path
+	if (!url && req.path.startsWith('/request/')) {
+		// Remove /request/ prefix and decode
+		const pathPart = req.path.substring(9);
+		url = decodeURIComponent(pathPart);
+
+		// Handle both with and without protocol
+		if (!url.startsWith('http://') && !url.startsWith('https://')) {
+			url = 'https://' + url;
+		}
+	}
+
+	return url;
+};
+
+// GET endpoint handler for transparent URL access
+const get = async (req, res) => {
+	try {
+		const url = extractUrl(req);
+
+		if (!url) {
+			res.status(400).send({ error: 'URL parameter is required' });
+			return;
+		}
+
+		console.log(`GET request for URL: ${url}`);
+
+		// Extract local parameters
+		const personaId = req.query.persona;
+		const usePersonaParam = req.query.use_persona === 'true';
+
+		// Strip local params from URL before proxying
+		const cleanUrl = stripLocalParams(url);
+		if (cleanUrl !== url) {
+			console.log(`Stripped local params from URL: ${url} -> ${cleanUrl}`);
+		}
+
+		// Create request body similar to POST format
+		const reqBody = {
+			url: cleanUrl,
+			personaId: personaId || undefined,
+			// For GET, we don't require payment by default (configurable)
+			payment: { skip: true }  // Placeholder: actual payment logic can be added
+		};
+
+		// Mock request object with body
+		const mockReq = {
+			body: reqBody,
+			headers: req.headers
+		};
+
+		await processRequest(mockReq, res);
+	} catch (err) {
+		console.error('ERROR in acceptPageRequest.get:', err);
+		res.status(500).send({ error: 'Internal server error' });
+	}
+};
+
 // Endpoint handler
 const acceptPageRequest = {
 	post: async (req, res) => {
@@ -202,7 +281,8 @@ const acceptPageRequest = {
 			console.error('ERROR in acceptPageRequest:', err);
 			res.status(500).send({ error: 'Internal server error' });
 		}
-	}
+	},
+	get
 };
 
 // Management endpoints for debugging/admin
@@ -221,4 +301,4 @@ const getPersonas = {
 };
 
 export default acceptPageRequest;
-export { getStats, getPersonas, youtubeManager, loadPersonasFromDatabase };
+export { getStats, getPersonas, youtubeManager, loadPersonasFromDatabase, LOCAL_PARAMS };

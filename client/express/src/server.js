@@ -25,6 +25,24 @@ server.use((req, res, next) => {
 // Main route: forward requests to remote node
 server.get('/request', forwardRequest.get);
 
+// Transparent route: paste URL directly after /request/
+server.get('/request/*', (req, res) => {
+	// Extract URL from path (everything after /request/)
+	const urlPath = req.path.substring(9); // Remove '/request/'
+	const decodedUrl = decodeURIComponent(urlPath);
+
+	// Mock request object with URL in query
+	const mockReq = {
+		...req,
+		query: {
+			url: decodedUrl,
+			...req.query // Preserve any other query params like persona
+		}
+	};
+
+	forwardRequest.get(mockReq, res);
+});
+
 // Health check
 server.get('/health', (req, res) => {
 	res.send({ status: 'ok', timestamp: Date.now() });
@@ -37,9 +55,15 @@ server.get('/', (req, res) => {
 		version: '1.0.0',
 		status: 'running',
 		endpoints: {
-			request: 'GET /request?url=<encoded-url>',
+			request: 'GET /request?url=<encoded-url> or GET /request/<url>',
+			request_with_persona: 'GET /request/<url>?persona=<id>',
 			health: 'GET /health'
-		}
+		},
+		examples: [
+			'GET /request/https://youtube.com/watch?v=123',
+			'GET /request/youtube.com/watch?v=123',
+			'GET /request?url=https://youtube.com/watch?v=123&persona=abc123'
+		]
 	});
 });
 
