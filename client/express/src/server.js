@@ -31,16 +31,20 @@ server.get('/request/*', (req, res) => {
 	const urlPath = req.path.substring(9); // Remove '/request/'
 	const decodedUrl = decodeURIComponent(urlPath);
 
-	// Mock request object with URL in query
-	const mockReq = {
-		...req,
-		query: {
-			url: decodedUrl,
-			...req.query // Preserve any other query params like persona
-		}
+	// Store original query to restore later
+	const originalQuery = req.query;
+
+	// Temporarily modify the request object to add URL parameter
+	req.query = {
+		url: decodedUrl,
+		...originalQuery // Preserve any other query params like persona
 	};
 
-	forwardRequest.get(mockReq, res);
+	// Call the forward request handler
+	forwardRequest.get(req, res);
+
+	// Restore original query (in case it's needed later, though unlikely for this request)
+	req.query = originalQuery;
 });
 
 // Health check

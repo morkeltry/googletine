@@ -53,9 +53,14 @@ const buildForwardHeaders = (req) => {
 	];
 
 	for (const headerName of browserHeadersToForward) {
-		const value = req.headers[headerName];
+		// Use req.get() to safely access headers (Express API)
+		const value = req.get(headerName);
 		if (value) {
-			headers[headerName] = value;
+			// Capitalize first letter of each word for HTTP header format
+			const formattedName = headerName.split('-').map(word =>
+				word.charAt(0).toUpperCase() + word.slice(1)
+			).join('-');
+			headers[formattedName] = value;
 		}
 	}
 

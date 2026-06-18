@@ -55,6 +55,19 @@ const modifyResponse = (response) => {
 	return response;
 };
 
+// Headers to strip from response (identifying headers)
+const STRIP_RESPONSE_HEADERS = ['etag', 'x-etag', 'if-match', 'if-none-match'];
+
+// Forward headers from fetch response to client response, stripping identifying headers
+const forwardResponseHeaders = (fetchResponse, clientResponse) => {
+	fetchResponse.headers.forEach((value, key) => {
+		const lowerKey = key.toLowerCase();
+		if (!STRIP_RESPONSE_HEADERS.includes(lowerKey)) {
+			clientResponse.setHeader(key, value);
+		}
+	});
+};
+
 // Extract browser headers that were forwarded from the client
 const getForwardedBrowserHeaders = (incomingHeaders) => {
 	const headers = {};
@@ -506,6 +519,10 @@ const processRequest = async (req, res) => {
 
 		// Stream response to client
 		const arrayBuffer = await fullResponse.arrayBuffer();
+
+		// Forward all response headers except identifying ones
+		forwardResponseHeaders(fullResponse, res);
+
 		res.status(200);
 		res.send(Buffer.from(arrayBuffer));
 
