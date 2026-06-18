@@ -11,12 +11,55 @@ const { googletineNodes } = constants;
 // Local parameters that should be stripped before proxying
 const LOCAL_PARAMS = ['persona', 'use_persona'];
 
+// Headers to strip from response (identifying headers)
+const STRIP_RESPONSE_HEADERS = ['etag', 'x-etag', 'if-match', 'if-none-match'];
+
 // Get preferred remote node (simple round-robin for now)
 let currentNodeIndex = 0;
 const getRemoteNode = () => {
 	const node = googletineNodes[currentNodeIndex];
 	currentNodeIndex = (currentNodeIndex + 1) % googletineNodes.length;
 	return node;
+};
+
+// Forward headers from fetch response to client response, stripping identifying headers
+const forwardHeaders = (fetchResponse, clientResponse) => {
+	fetchResponse.headers.forEach((value, key) => {
+		const lowerKey = key.toLowerCase();
+		if (!STRIP_RESPONSE_HEADERS.includes(lowerKey)) {
+			clientResponse.setHeader(key, value);
+		}
+	});
+};
+
+// Build headers to forward to server, including browser's headers
+const buildForwardHeaders = (req) => {
+	const headers = {
+		'X-Session-Id': `client-${Date.now()}`
+	};
+
+	// Forward browser's headers that should influence the destination response
+	// These help the server appear as the requesting browser
+	const browserHeadersToForward = [
+		'accept',
+		'accept-language',
+		'accept-encoding',
+		'user-agent',
+		'dnt',
+		'sec-fetch-dest',
+		'sec-fetch-mode',
+		'sec-fetch-site',
+		'sec-fetch-user'
+	];
+
+	for (const headerName of browserHeadersToForward) {
+		const value = req.headers[headerName];
+		if (value) {
+			headers[headerName] = value;
+		}
+	}
+
+	return headers;
 };
 
 // Normalize URL - add https:// if missing
@@ -72,9 +115,7 @@ const processRequest = async (url, clientResponse, req, useGet = false) => {
 
 			response = await fetch(forwardUrl, {
 				method: 'GET',
-				headers: {
-					'X-Session-Id': `client-${Date.now()}`
-				}
+				headers: buildForwardHeaders(req)
 			});
 		} else {
 			// Forward as POST (existing behavior)
@@ -90,7 +131,7 @@ const processRequest = async (url, clientResponse, req, useGet = false) => {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
-					'X-Session-Id': `client-${Date.now()}`
+					...buildForwardHeaders(req)
 				},
 				body: JSON.stringify(requestBody)
 			});
@@ -128,7 +169,7 @@ const processRequest = async (url, clientResponse, req, useGet = false) => {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
-					'X-Session-Id': `client-${Date.now()}`,
+					...buildForwardHeaders(req),
 					...paymentHeaders
 				},
 				body: JSON.stringify({
@@ -146,6 +187,10 @@ const processRequest = async (url, clientResponse, req, useGet = false) => {
 
 			// Stream successful response to browser
 			const arrayBuffer = await retryResponse.arrayBuffer();
+
+			// Forward all headers except identifying ones (ETag, etc.)
+			forwardHeaders(retryResponse, clientResponse);
+
 			clientResponse.status(200);
 			clientResponse.send(Buffer.from(arrayBuffer));
 			return;
@@ -154,6 +199,10 @@ const processRequest = async (url, clientResponse, req, useGet = false) => {
 		// No payment required - stream response to browser
 		if (response.ok) {
 			const arrayBuffer = await response.arrayBuffer();
+
+			// Forward all headers except identifying ones (ETag, etc.)
+			forwardHeaders(response, clientResponse);
+
 			clientResponse.status(response.status);
 			clientResponse.send(Buffer.from(arrayBuffer));
 		} else {

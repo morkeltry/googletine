@@ -55,6 +55,37 @@ const modifyResponse = (response) => {
 	return response;
 };
 
+// Extract browser headers that were forwarded from the client
+const getForwardedBrowserHeaders = (incomingHeaders) => {
+	const headers = {};
+
+	// Headers that should be forwarded from the browser to influence the response
+	const browserHeadersToExtract = [
+		'accept',
+		'accept-language',
+		'accept-encoding',
+		'user-agent',
+		'dnt',
+		'sec-fetch-dest',
+		'sec-fetch-mode',
+		'sec-fetch-site',
+		'sec-fetch-user'
+	];
+
+	for (const headerName of browserHeadersToExtract) {
+		const value = incomingHeaders[headerName];
+		if (value) {
+			// Capitalize first letter of each word for HTTP header format
+			const formattedName = headerName.split('-').map(word =>
+				word.charAt(0).toUpperCase() + word.slice(1)
+			).join('-');
+			headers[formattedName] = value;
+		}
+	}
+
+	return headers;
+};
+
 // Generate Apache-style 402 Payment Required page
 const generate402Page = (url, paymentReq) => {
 	const amount = paymentReq.amount || 0;
@@ -432,7 +463,15 @@ const processRequest = async (req, res) => {
 				persona = youtubeManager.getPersona();
 			}
 			console.log(`Using YouTube persona: ${persona.id} (request #${persona.requestCount + 1})`);
-			headers = persona.getRequestHeaders();
+
+			// Start with forwarded browser headers (if available)
+			headers = getForwardedBrowserHeaders(req.headers);
+
+			// Override with persona cookies (this is the key - replace browser cookies with persona cookies)
+			const personaHeaders = persona.getRequestHeaders();
+			if (personaHeaders.Cookie) {
+				headers.Cookie = personaHeaders.Cookie;
+			}
 		} else {
 			// For other providers, use basic headers
 			headers = {
