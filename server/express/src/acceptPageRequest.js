@@ -55,6 +55,288 @@ const modifyResponse = (response) => {
 	return response;
 };
 
+// Generate Apache-style 402 Payment Required page
+const generate402Page = (url, paymentReq) => {
+	const amount = paymentReq.amount || 0;
+	const currency = paymentReq.currency || 'MPP';
+	const timestamp = paymentReq.timestamp ? new Date(paymentReq.timestamp).toISOString() : new Date().toISOString();
+
+	return `<!DOCTYPE html>
+<html>
+<head>
+	<title>402 Payment Required</title>
+	<style>
+		body {
+			font-family: Arial, sans-serif;
+			background-color: #f5f5f5;
+			margin: 0;
+			padding: 40px;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			min-height: 100vh;
+		}
+		.container {
+			background: white;
+			max-width: 700px;
+			padding: 40px;
+			border-radius: 8px;
+			box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+		}
+		h1 {
+			color: #d32f2f;
+			font-size: 36px;
+			margin: 0 0 20px 0;
+			border-bottom: 2px solid #d32f2f;
+			padding-bottom: 10px;
+		}
+		.error-code {
+			font-size: 72px;
+			color: #d32f2f;
+			font-weight: bold;
+			margin: 0 0 10px 0;
+		}
+		.error-title {
+			font-size: 24px;
+			color: #333;
+			margin: 0 0 30px 0;
+		}
+		.section {
+			margin: 30px 0;
+			padding: 20px;
+			background: #f9f9f9;
+			border-left: 4px solid #d32f2f;
+		}
+		.section h2 {
+			margin-top: 0;
+			color: #333;
+			font-size: 18px;
+		}
+		.payment-details {
+			background: #fff3cd;
+			border-left-color: #ffc107;
+		}
+		dl {
+			margin: 10px 0;
+		}
+		dt {
+			font-weight: bold;
+			color: #555;
+			margin-top: 10px;
+		}
+		dd {
+			margin-left: 0;
+			color: #333;
+			font-family: monospace;
+			background: white;
+			padding: 8px 12px;
+			border-radius: 4px;
+			margin-top: 5px;
+		}
+		.url-display {
+			word-break: break-all;
+			color: #666;
+		}
+		.machine-readable {
+			font-family: monospace;
+			font-size: 12px;
+			background: #263238;
+			color: #aed581;
+			padding: 15px;
+			border-radius: 4px;
+			overflow-x: auto;
+		}
+		.note {
+			font-size: 14px;
+			color: #666;
+			font-style: italic;
+		}
+		.arrow {
+			font-size: 24px;
+			color: #d32f2f;
+		}
+	</style>
+</head>
+<body>
+	<div class="container">
+		<div class="error-code">402</div>
+		<h1 class="error-title">Payment Required</h1>
+
+		<div class="section">
+			<h2>What does this mean?</h2>
+			<p>The content you requested requires payment to access. This server uses a micropayment system to process requests and deliver content.</p>
+			<p class="note">HTTP Status Code 402 (Payment Required) - The request cannot be completed until payment is made.</p>
+		</div>
+
+		<div class="section payment-details">
+			<h2>💳 Payment Required</h2>
+			<dl>
+				<dt>Amount Due:</dt>
+				<dd>${amount} ${currency}</dd>
+
+				<dt>Session ID:</dt>
+				<dd>${paymentReq.sessionId || 'N/A'}</dd>
+
+				<dt>Request Timestamp:</dt>
+				<dd>${timestamp}</dd>
+
+				<dt>Requested URL:</dt>
+				<dd class="url-display">${url}</dd>
+			</dl>
+		</div>
+
+		<div class="section">
+			<h2>🔧 Machine-Readable Format</h2>
+			<p>Your client can extract payment details from the following HTTP header:</p>
+			<div class="machine-readable">
+				X-Payment-Required: ${JSON.stringify(paymentReq, null, 2)}
+			</div>
+			<p style="margin-top: 15px;">
+				<span class="arrow">→</span>
+				<strong>To proceed:</strong> Make the payment and retry your request with the payment details in the <code>X-Payment</code> header.
+			</p>
+		</div>
+
+		<div class="section">
+			<h2>📖 How to Complete Payment</h2>
+			<ol>
+				<li>Extract the payment request from the <code>X-Payment-Required</code> header</li>
+				<li>Process the payment using your payment client</li>
+				<li>Retry the original request with payment details in <code>X-Payment</code> header</li>
+			</ol>
+		</div>
+	</div>
+</body>
+</html>`;
+};
+
+// Generate 402 page for invalid payment
+const generate402InvalidPage = (url, error) => {
+	return `<!DOCTYPE html>
+<html>
+<head>
+	<title>402 Payment Invalid</title>
+	<style>
+		body {
+			font-family: Arial, sans-serif;
+			background-color: #f5f5f5;
+			margin: 0;
+			padding: 40px;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			min-height: 100vh;
+		}
+		.container {
+			background: white;
+			max-width: 700px;
+			padding: 40px;
+			border-radius: 8px;
+			box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+		}
+		h1 {
+			color: #f57c00;
+			font-size: 36px;
+			margin: 0 0 20px 0;
+			border-bottom: 2px solid #f57c00;
+			padding-bottom: 10px;
+		}
+		.error-code {
+			font-size: 72px;
+			color: #f57c00;
+			font-weight: bold;
+			margin: 0 0 10px 0;
+		}
+		.error-title {
+			font-size: 24px;
+			color: #333;
+			margin: 0 0 30px 0;
+		}
+		.section {
+			margin: 30px 0;
+			padding: 20px;
+			background: #fff3cd;
+			border-left: 4px solid #f57c00;
+		}
+		.section h2 {
+			margin-top: 0;
+			color: #333;
+			font-size: 18px;
+		}
+		.error-display {
+			background: #ffebee;
+			border-left-color: #d32f2f;
+		}
+		dl {
+			margin: 10px 0;
+		}
+		dt {
+			font-weight: bold;
+			color: #555;
+			margin-top: 10px;
+		}
+		dd {
+			margin-left: 0;
+			color: #333;
+			font-family: monospace;
+			background: white;
+			padding: 8px 12px;
+			border-radius: 4px;
+			margin-top: 5px;
+		}
+		.url-display {
+			word-break: break-all;
+			color: #666;
+		}
+		code {
+			background: #f5f5f5;
+			padding: 2px 6px;
+			border-radius: 3px;
+			font-size: 14px;
+		}
+	</style>
+</head>
+<body>
+	<div class="container">
+		<div class="error-code">402</div>
+		<h1 class="error-title">Payment Invalid</h1>
+
+		<div class="section error-display">
+			<h2>❌ Payment Validation Failed</h2>
+			<dl>
+				<dt>Error:</dt>
+				<dd>${error}</dd>
+
+				<dt>Requested URL:</dt>
+				<dd class="url-display">${url}</dd>
+			</dl>
+		</div>
+
+		<div class="section">
+			<h2>What does this mean?</h2>
+			<p>The payment you provided could not be validated. This could mean:</p>
+			<ul>
+				<li>The payment has already been used</li>
+				<li>The payment was not found in the payment system</li>
+				<li>The payment structure is invalid</li>
+				<li>The payment amount is insufficient</li>
+			</ul>
+		</div>
+
+		<div class="section">
+			<h2>🔧 How to Fix</h2>
+			<ol>
+				<li>Verify your payment was processed successfully</li>
+				<li>Check that you're sending the correct payment transaction ID</li>
+				<li>Ensure the payment hasn't been used for another request</li>
+				<li>Try making a new payment and retry the request</li>
+			</ol>
+		</div>
+	</div>
+</body>
+</html>`;
+};
+
 // Generate fetch modifiers for cookie injection
 const getFetchModifier = (url, persona) => {
 	if (url.indexOf('medium.com') > -1) {
@@ -102,12 +384,14 @@ const processRequest = async (req, res) => {
 		const paymentReq = requestPayment(url, sessionId);
 		const headers = createPaymentRequestHeaders(paymentReq);
 
+		// Set status and headers
 		res.status(402);
 		Object.entries(headers).forEach(([key, value]) => res.setHeader(key, value));
-		res.send({
-			error: 'Payment required',
-			paymentRequest: paymentReq
-		});
+
+		// Generate Apache-style 402 HTML page
+		const htmlPage = generate402Page(url, paymentReq);
+		res.setHeader('Content-Type', 'text/html');
+		res.send(htmlPage);
 		return;
 	}
 
@@ -117,10 +401,9 @@ const processRequest = async (req, res) => {
 
 	if (!paymentResult.valid) {
 		console.log('Payment validation failed:', paymentResult.error);
-		res.status(402).send({
-			error: 'Payment invalid',
-			details: paymentResult.error
-		});
+		res.status(402);
+		res.setHeader('Content-Type', 'text/html');
+		res.send(generate402InvalidPage(url, paymentResult.error));
 		return;
 	}
 
@@ -254,9 +537,8 @@ const get = async (req, res) => {
 		// Create request body similar to POST format
 		const reqBody = {
 			url: cleanUrl,
-			personaId: personaId || undefined,
-			// For GET, we don't require payment by default (configurable)
-			payment: { skip: true }  // Placeholder: actual payment logic can be added
+			personaId: personaId || undefined
+			// No payment - will trigger 402 payment required page
 		};
 
 		// Mock request object with body
