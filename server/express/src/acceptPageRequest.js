@@ -567,6 +567,38 @@ const processRequest = async (req, res) => {
 		// Forward all response headers except identifying ones
 		forwardResponseHeaders(fullResponse, res);
 
+		// Add persona cookies to browser so YouTube's JS recognizes consent
+		if (persona && persona.cookies.size > 0) {
+			for (const [name, cookie] of persona.cookies.entries()) {
+				// Build Set-Cookie header value
+				let cookieValue = `${name}=${cookie.value}`;
+
+				// Add cookie attributes
+				if (cookie.domain) {
+					cookieValue += `; Domain=${cookie.domain}`;
+				}
+				if (cookie.path) {
+					cookieValue += `; Path=${cookie.path}`;
+				}
+				if (cookie.expires && typeof cookie.expires === 'string') {
+					cookieValue += `; Expires=${cookie.expires}`;
+				}
+				if (cookie.secure) {
+					cookieValue += '; Secure';
+				}
+				if (cookie.httpOnly) {
+					cookieValue += '; HttpOnly';
+				}
+				if (cookie.sameSite) {
+					cookieValue += `; SameSite=${cookie.sameSite}`;
+				}
+
+				// Set the cookie in the browser
+				res.append('Set-Cookie', cookieValue);
+			}
+			console.log(`Set ${persona.cookies.size} cookies in browser response`);
+		}
+
 		res.status(fullResponse.status);
 
 		// Stream the response body instead of buffering

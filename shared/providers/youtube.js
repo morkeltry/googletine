@@ -71,11 +71,11 @@ export class YouTubePersona extends Persona {
 	 */
 	getYouTubeCookieStatus() {
 		return {
-			VISITOR_PRIVACY_METADATA: this.cookies.get('VISITOR_PRIVACY_METADATA')?.value?.substring(0, 50) || null,
+			VISITOR_PRIVACY_METADATA: this.cookies.get('VISITOR_PRIVACY_METADATA')?.value || null,
 			VISITOR_INFO1_LIVE: this.cookies.get('VISITOR_INFO1_LIVE')?.value || null,
 			YSC: this.cookies.get('YSC')?.value || null,
-			__Secure_YEC: this.cookies.get('__Secure-YEC')?.value?.substring(0, 50) || null,
-			__Secure_YENID: this.cookies.get('__Secure-YENID')?.value?.substring(0, 50) || null
+			__Secure_YEC: this.cookies.get('__Secure-YEC')?.value || null,
+			__Secure_YENID: this.cookies.get('__Secure-YENID')?.value || null
 		};
 	}
 }
@@ -129,38 +129,33 @@ export class YouTubePersonaManager extends PersonaManager {
 
 	/**
 	 * Initialize a persona by making a request to YouTube to accept terms and get cookies
-	 * Uses headless browser to properly click through consent dialog
+	 * Uses simple fetch for now (consent handler integration pending)
 	 * @param {YouTubePersona} persona - The persona to initialize
 	 */
 	async initializePersona(persona) {
 		try {
 			console.log(`Initializing persona ${persona.id} - accepting YouTube terms...`);
 
-			// Use Puppeteer to handle consent dialog properly
-			const result = await initializeYouTubePersonaWithConsent('https://www.youtube.com');
+			// Simple fetch to get cookies (consent handler integration pending optimization)
+			const youtubeUrl = 'https://www.youtube.com';
+			const headers = persona.getRequestHeaders();
 
-			if (!result.success) {
-				console.warn(`Failed to initialize persona ${persona.id}: ${result.consentResult.details}`);
-				return;
+			const response = await fetch(youtubeUrl, { headers });
+
+			if (response.ok) {
+				// Update persona with cookies from the response
+				const setCookieHeaders = response.headers?.getSetCookie();
+				if (setCookieHeaders) {
+					persona.updateCookies(setCookieHeaders, 'www.youtube.com');
+				}
+
+				// Update YouTube-specific state
+				persona.updateYouTubeState();
+
+				console.log(`Persona ${persona.id} initialized with ${persona.cookies.size} cookies`);
+			} else {
+				console.warn(`Failed to initialize persona ${persona.id}: ${response.status}`);
 			}
-
-			// Convert Puppeteer cookies to our format
-			for (const cookie of result.cookies) {
-				persona.cookies.set(cookie.name, {
-					name: cookie.name,
-					value: cookie.value,
-					domain: cookie.domain || '.youtube.com',
-					attributes: [],
-					secure: cookie.secure || false,
-					httpOnly: cookie.httpOnly || false
-				});
-			}
-
-			// Update YouTube-specific state
-			persona.updateYouTubeState();
-
-			console.log(`Persona ${persona.id} initialized with ${persona.cookies.size} cookies`);
-			console.log(`Consent result: ${result.consentResult.details}`);
 
 		} catch (error) {
 			console.error(`Error initializing persona ${persona.id}:`, error.message);
