@@ -117,26 +117,20 @@ const parseSetCookie = (cookieString) => {
 	const cookie = {
 		name: name.trim(),
 		value: value.trim(),
-		attrs: new Map()
+		attrs: [] // Store original attribute strings to preserve capitalization
 	};
 
-	// Parse attributes
+	// Parse attributes - store original strings to preserve exact capitalization
 	for (const attr of rawAttrs) {
 		if (!attr) continue;
 
 		const attrLower = attr.toLowerCase();
 		if (attrLower === 'secure') {
-			cookie.attrs.set('secure', true);
-		} else if (attrLower === 'httponly') {
-			cookie.attrs.set('httponly', true);
-		} else if (attr.includes('=')) {
-			const [attrName, ...attrValParts] = attr.split('=');
-			const attrNameLower = attrName.trim().toLowerCase();
-			const attrVal = attrValParts.join('=').trim();
-			cookie.attrs.set(attrNameLower, attrVal);
+			// Skip Secure attribute (will be removed for HTTP)
+			continue;
 		} else {
-			// Flags without values
-			cookie.attrs.set(attr.toLowerCase(), true);
+			// Store attribute string as-is to preserve capitalization
+			cookie.attrs.push(attr.trim());
 		}
 	}
 
@@ -152,28 +146,16 @@ const parseSetCookie = (cookieString) => {
 const rebuildSetCookie = (cookie) => {
 	let parts = [`${cookie.name}=${cookie.value}`];
 
-	// Add attributes in standard order
-	const attrOrder = ['domain', 'path', 'expires', 'max-age', 'httponly', 'secure', 'samesite'];
-
-	for (const key of attrOrder) {
-		if (cookie.attrs.has(key)) {
-			const val = cookie.attrs.get(key);
-			if (val === true) {
-				parts.push(key);
-			} else {
-				parts.push(`${key}=${val}`);
-			}
-		}
-	}
-
-	// Add any remaining attributes not in standard order
-	for (const [key, val] of cookie.attrs.entries()) {
-		if (!attrOrder.includes(key)) {
-			if (val === true) {
-				parts.push(key);
-			} else {
-				parts.push(`${key}=${val}`);
-			}
+	// Add all attributes back with original capitalization
+	for (const attr of cookie.attrs) {
+		// Check if this is a domain attribute and modify it
+		const attrLower = attr.toLowerCase();
+		if (attrLower.startsWith('domain=')) {
+			// Change domain to localhost, preserve the rest
+			parts.push('domain=localhost');
+		} else {
+			// Keep original attribute with exact capitalization
+			parts.push(attr);
 		}
 	}
 
