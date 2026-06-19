@@ -49,6 +49,21 @@ const forwardHeaders = (fetchResponse, clientResponse) => {
 			clientResponse.setHeader(key, value);
 		}
 	});
+
+	// Log EXACT headers being sent to browser from client
+	console.log('=== CLIENT - EXACT HEADERS BEING SENT TO BROWSER ===');
+	console.log('Status:', clientResponse.statusCode);
+	const headersSent = clientResponse.getHeaders();
+	for (const [key, value] of Object.entries(headersSent)) {
+		if (Array.isArray(value)) {
+			for (let i = 0; i < value.length; i++) {
+				console.log(`  ${key}:`, value[i]);
+			}
+		} else {
+			console.log(`  ${key}:`, value);
+		}
+	}
+	console.log('=== CLIENT - END EXACT HEADERS ===');
 };
 
 // Build headers to forward to server, including browser's headers
