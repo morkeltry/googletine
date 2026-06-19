@@ -8,3 +8,4 @@ npm-debug.log
 youtube/
 server/data/.googletine-db.json
 .googletine-config.json
+output/
