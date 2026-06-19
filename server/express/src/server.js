@@ -36,13 +36,13 @@ server.get('/request/*', (req, res) => {
 	const urlPath = req.path.substring(9); // Remove '/request/'
 	const decodedUrl = decodeURIComponent(urlPath);
 
-	// Mock request object with URL in query
+	// Mock request object with URL in query and preserved headers
 	const mockReq = {
-		...req,
 		query: {
 			url: decodedUrl,
 			...req.query // Preserve any other query params like persona
-		}
+		},
+		headers: req.headers // Explicitly preserve headers
 	};
 
 	acceptPageRequest.get(mockReq, res);

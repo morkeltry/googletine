@@ -94,11 +94,142 @@ const modifyResponse = (response) => {
 // Headers to strip from response (identifying headers)
 const STRIP_RESPONSE_HEADERS = ['etag', 'x-etag', 'if-match', 'if-none-match'];
 
+/**
+ * Parse and modify a Set-Cookie header value
+ * Changes domain to localhost and removes Secure flag for HTTP serving
+ * @param {string} cookieString - The Set-Cookie header value
+ * @returns {object} Parsed cookie with name, value, and attributes
+ */
+const parseSetCookie = (cookieString) => {
+	if (!cookieString) return null;
+
+	// Split into name-value and attributes
+	const parts = cookieString.split(';').map(s => s.trim());
+	const [nameValue, ...rawAttrs] = parts;
+
+	if (!nameValue || !nameValue.includes('=')) {
+		return null;
+	}
+
+	const [name, ...valueParts] = nameValue.split('=');
+	const value = valueParts.join('=');
+
+	const cookie = {
+		name: name.trim(),
+		value: value.trim(),
+		attrs: new Map()
+	};
+
+	// Parse attributes
+	for (const attr of rawAttrs) {
+		if (!attr) continue;
+
+		const attrLower = attr.toLowerCase();
+		if (attrLower === 'secure') {
+			cookie.attrs.set('secure', true);
+		} else if (attrLower === 'httponly') {
+			cookie.attrs.set('httponly', true);
+		} else if (attr.includes('=')) {
+			const [attrName, ...attrValParts] = attr.split('=');
+			const attrNameLower = attrName.trim().toLowerCase();
+			const attrVal = attrValParts.join('=').trim();
+			cookie.attrs.set(attrNameLower, attrVal);
+		} else {
+			// Flags without values
+			cookie.attrs.set(attr.toLowerCase(), true);
+		}
+	}
+
+	return cookie;
+};
+
+/**
+ * Rebuild a Set-Cookie header value from parsed cookie
+ * Applies modifications: changes domain to localhost, removes Secure flag
+ * @param {object} cookie - Parsed cookie object
+ * @returns {string} Modified Set-Cookie header value
+ */
+const rebuildSetCookie = (cookie) => {
+	let parts = [`${cookie.name}=${cookie.value}`];
+
+	// Add attributes in standard order
+	const attrOrder = ['domain', 'path', 'expires', 'max-age', 'httponly', 'secure', 'samesite'];
+
+	for (const key of attrOrder) {
+		if (cookie.attrs.has(key)) {
+			const val = cookie.attrs.get(key);
+			if (val === true) {
+				parts.push(key);
+			} else {
+				parts.push(`${key}=${val}`);
+			}
+		}
+	}
+
+	// Add any remaining attributes not in standard order
+	for (const [key, val] of cookie.attrs.entries()) {
+		if (!attrOrder.includes(key)) {
+			if (val === true) {
+				parts.push(key);
+			} else {
+				parts.push(`${key}=${val}`);
+			}
+		}
+	}
+
+	return parts.join('; ');
+};
+
+/**
+ * Modify a cookie for localhost forwarding
+ * Changes domain to localhost and removes Secure flag
+ * @param {string} cookieString - Original Set-Cookie header value
+ * @returns {string} Modified Set-Cookie header value
+ */
+const modifyCookieForLocalhost = (cookieString) => {
+	const cookie = parseSetCookie(cookieString);
+	if (!cookie) return cookieString;
+
+	// Change domain to localhost (with port for our setup)
+	cookie.attrs.set('domain', 'localhost:6060');
+
+	// Remove Secure flag since we're serving on HTTP
+	cookie.attrs.delete('secure');
+
+	return rebuildSetCookie(cookie);
+};
+
 // Forward headers from fetch response to client response, stripping identifying headers
 const forwardResponseHeaders = (fetchResponse, clientResponse) => {
+	// Handle Set-Cookie separately to properly forward all cookies
+	const setCookies = fetchResponse.headers.getSetCookie();
+	console.log('DEBUG: YouTube sent', setCookies ? setCookies.length : 0, 'Set-Cookie headers');
+
+	if (setCookies && setCookies.length > 0) {
+		// Modify all cookies and collect in array
+		const modifiedCookies = [];
+		for (const cookie of setCookies) {
+			const parsed = parseSetCookie(cookie);
+			if (parsed && parsed.value) {
+				const modified = modifyCookieForLocalhost(cookie);
+				modifiedCookies.push(modified);
+				console.log('DEBUG: Modified cookie:', parsed.name, '-> domain=localhost:6060, removed Secure');
+			} else {
+				console.log('DEBUG: Skipping invalid cookie');
+			}
+		}
+
+		// Set all cookies as separate headers using array
+		if (modifiedCookies.length > 0) {
+			clientResponse.setHeader('Set-Cookie', modifiedCookies);
+			console.log(`DEBUG: Set ${modifiedCookies.length} Set-Cookie headers as separate headers`);
+		}
+	}
+
+	// Forward all other headers except identifying ones
 	fetchResponse.headers.forEach((value, key) => {
 		const lowerKey = key.toLowerCase();
-		if (!STRIP_RESPONSE_HEADERS.includes(lowerKey)) {
+		if (!STRIP_RESPONSE_HEADERS.includes(lowerKey) && lowerKey !== 'set-cookie') {
 			clientResponse.setHeader(key, value);
 		}
 	});
@@ -564,46 +695,14 @@ const processRequest = async (req, res) => {
 		}
 
 		// Stream response to client
-		// Forward all response headers except identifying ones
+		// Forward response headers (including properly formatted Set-Cookie headers)
 		forwardResponseHeaders(fullResponse, res);
 
-		// Add persona cookies to browser so YouTube's JS recognizes consent
-		if (persona && persona.cookies.size > 0) {
-			for (const [name, cookie] of persona.cookies.entries()) {
-				// Build Set-Cookie header value
-				let cookieValue = `${name}=${cookie.value}`;
-
-				// Add cookie attributes
-				if (cookie.domain) {
-					cookieValue += `; Domain=${cookie.domain}`;
-				}
-				if (cookie.path) {
-					cookieValue += `; Path=${cookie.path}`;
-				}
-				if (cookie.expires && typeof cookie.expires === 'string') {
-					cookieValue += `; Expires=${cookie.expires}`;
-				}
-				if (cookie.secure) {
-					cookieValue += '; Secure';
-				}
-				if (cookie.httpOnly) {
-					cookieValue += '; HttpOnly';
-				}
-				if (cookie.sameSite) {
-					cookieValue += `; SameSite=${cookie.sameSite}`;
-				}
-
-				// Set the cookie in the browser
-				res.append('Set-Cookie', cookieValue);
-			}
-			console.log(`Set ${persona.cookies.size} cookies in browser response`);
-		}
-
+		// Set response status
 		res.status(fullResponse.status);
 
-		// Stream the response body instead of buffering
+		// Stream the response body directly
 		if (fullResponse.body) {
-			// Pipe the response body directly to the client response
 			for await (const chunk of fullResponse.body) {
 				res.write(chunk);
 			}
