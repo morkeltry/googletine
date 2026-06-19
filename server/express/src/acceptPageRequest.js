@@ -190,8 +190,8 @@ const modifyCookieForLocalhost = (cookieString) => {
 	const cookie = parseSetCookie(cookieString);
 	if (!cookie) return cookieString;
 
-	// Change domain to localhost (with port for our setup)
-	cookie.attrs.set('domain', 'localhost:6060');
+	// Change domain to localhost (NO PORT - browsers reject ports in cookie domains)
+	cookie.attrs.set('domain', 'localhost');
 
 	// Remove Secure flag since we're serving on HTTP
 	cookie.attrs.delete('secure');
@@ -203,7 +203,8 @@ const modifyCookieForLocalhost = (cookieString) => {
 const forwardResponseHeaders = (fetchResponse, clientResponse) => {
 	// Handle Set-Cookie separately to properly forward all cookies
 	const setCookies = fetchResponse.headers.getSetCookie();
-	console.log('DEBUG: YouTube sent', setCookies ? setCookies.length : 0, 'Set-Cookie headers');
+	console.log('=== COOKIE FORWARDING START ===');
+	console.log('YouTube sent', setCookies ? setCookies.length : 0, 'Set-Cookie headers');
 
 	if (setCookies && setCookies.length > 0) {
 		// Modify all cookies and collect in array
@@ -213,18 +214,29 @@ const forwardResponseHeaders = (fetchResponse, clientResponse) => {
 			if (parsed && parsed.value) {
 				const modified = modifyCookieForLocalhost(cookie);
 				modifiedCookies.push(modified);
-				console.log('DEBUG: Modified cookie:', parsed.name, '-> domain=localhost:6060, removed Secure');
+				console.log('Modified cookie:', parsed.name);
+				console.log('  Original:  ', cookie.substring(0, 100) + (cookie.length > 100 ? '...' : ''));
+				console.log('  Modified:  ', modified.substring(0, 100) + (modified.length > 100 ? '...' : ''));
 			} else {
-				console.log('DEBUG: Skipping invalid cookie');
+				console.log('Skipping invalid cookie:', cookie.substring(0, 50));
 			}
 		}
 
 		// Set all cookies as separate headers using array
 		if (modifiedCookies.length > 0) {
 			clientResponse.setHeader('Set-Cookie', modifiedCookies);
-			console.log(`DEBUG: Set ${modifiedCookies.length} Set-Cookie headers as separate headers`);
+			console.log('=== SETTING COOKIES TO BROWSER ===');
+			for (let i = 0; i < modifiedCookies.length; i++) {
+				console.log(`Cookie ${i + 1}/${modifiedCookies.length}:`, modifiedCookies[i]);
+			}
+			console.log(`Total cookies being sent: ${modifiedCookies.length}`);
+		} else {
+			console.log('No valid cookies to send');
 		}
+	} else {
+		console.log('No Set-Cookie headers from YouTube');
 	}
+	console.log('=== COOKIE FORWARDING END ===');
 
 	// Forward all other headers except identifying ones
 	fetchResponse.headers.forEach((value, key) => {
@@ -233,6 +245,21 @@ const forwardResponseHeaders = (fetchResponse, clientResponse) => {
 			clientResponse.setHeader(key, value);
 		}
 	});
+
+	// Log EXACT headers being sent to browser
+	console.log('=== EXACT HEADERS BEING SENT TO BROWSER ===');
+	console.log('Status:', clientResponse.statusCode);
+	const headersSent = clientResponse.getHeaders();
+	for (const [key, value] of Object.entries(headersSent)) {
+		if (Array.isArray(value)) {
+			for (let i = 0; i < value.length; i++) {
+				console.log(`  ${key}:`, value[i]);
+			}
+		} else {
+			console.log(`  ${key}:`, value);
+		}
+	}
+	console.log('=== END EXACT HEADERS ===');
 };
 
 // Extract browser headers that were forwarded from the client

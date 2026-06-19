@@ -24,9 +24,28 @@ const getRemoteNode = () => {
 
 // Forward headers from fetch response to client response, stripping identifying headers
 const forwardHeaders = (fetchResponse, clientResponse) => {
+	// Handle Set-Cookie separately to properly forward all cookies
+	const setCookies = fetchResponse.headers.getSetCookie();
+	console.log('=== CLIENT COOKIE FORWARDING ===');
+	console.log('Main server sent', setCookies ? setCookies.length : 0, 'Set-Cookie headers');
+
+	if (setCookies && setCookies.length > 0) {
+		console.log('Forwarding Set-Cookie headers to browser:');
+		for (let i = 0; i < setCookies.length; i++) {
+			console.log(`  Cookie ${i + 1}/${setCookies.length}:`, setCookies[i]);
+		}
+		// Set all cookies as separate headers using array
+		clientResponse.setHeader('Set-Cookie', setCookies);
+		console.log('Total cookies forwarded to browser:', setCookies.length);
+	} else {
+		console.log('No Set-Cookie headers to forward');
+	}
+	console.log('=== END CLIENT COOKIE FORWARDING ===');
+
+	// Forward all other headers except identifying ones
 	fetchResponse.headers.forEach((value, key) => {
 		const lowerKey = key.toLowerCase();
-		if (!STRIP_RESPONSE_HEADERS.includes(lowerKey)) {
+		if (!STRIP_RESPONSE_HEADERS.includes(lowerKey) && lowerKey !== 'set-cookie') {
 			clientResponse.setHeader(key, value);
 		}
 	});
