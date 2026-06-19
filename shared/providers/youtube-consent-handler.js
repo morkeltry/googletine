@@ -11,8 +11,8 @@ export async function handleYouTubeConsent(page) {
 
 	try {
 		// Wait for page to load
-		await page.waitForLoad({ waitUntil: 'domcontentloaded' });
-		await page.waitForTimeout(2000);
+		await page.waitForNavigation({ waitUntil: 'domcontentloaded' });
+		await new Promise(resolve => setTimeout(resolve, 2000));
 
 		// First, try to find the tp-yt-paper-dialog element
 		const dialogFound = await page.evaluate(() => {
@@ -137,7 +137,7 @@ export async function handleYouTubeConsent(page) {
 		}
 
 		// Wait for the dialog to disappear or page to update
-		await page.waitForTimeout(3000);
+		await new Promise(resolve => setTimeout(resolve, 3000));
 
 		// Verify dialog is gone
 		const dialogGone = await page.evaluate(() => {
@@ -197,7 +197,7 @@ export async function initializeYouTubePersonaWithConsent(url = 'https://www.you
 		const consentResult = await handleYouTubeConsent(page);
 
 		// Wait a bit for cookies to be set
-		await page.waitForTimeout(2000);
+		await new Promise(resolve => setTimeout(resolve, 2000));
 
 		// Capture all cookies
 		const cookies = await page.cookies();

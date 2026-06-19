@@ -5,7 +5,7 @@ import { requestPayment, receivePayment } from '../../../shared/payments/stub.js
 import { createPaymentRequestHeaders, parsePaymentHeaders } from '../../../shared/payments/headers.js';
 import { YouTubePersona, YouTubePersonaManager } from '../../../shared/providers/youtube.js';
 import { constants } from '../constants.js';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -49,6 +49,42 @@ const loadPersonasFromDatabase = () => {
 
 // Load personas on startup
 loadPersonasFromDatabase();
+
+// Save personas to database
+const savePersonasToDatabase = () => {
+	const dbPath = join(__dirname, '../../data', '.googletine-db.json');
+	const dataDir = join(__dirname, '../../data');
+
+	// Ensure data directory exists
+	if (!existsSync(dataDir)) {
+		mkdirSync(dataDir, { recursive: true });
+	}
+
+	try {
+		const personas = Array.from(youtubeManager.personas.values()).map(persona => ({
+			id: persona.id,
+			name: persona.name,
+			provider: persona.provider,
+			createdAt: persona.createdAt,
+			lastUsed: persona.lastUsed,
+			requestCount: persona.requestCount,
+			status: persona.status,
+			state: persona.state,
+			cookies: Array.from(persona.cookies.entries()),
+			headers: persona.headers
+		}));
+
+		const data = {
+			personas,
+			lastUpdated: Date.now()
+		};
+
+		writeFileSync(dbPath, JSON.stringify(data, null, 2));
+		console.log(`Saved ${personas.length} personas to database`);
+	} catch (err) {
+		console.error('Error saving personas to database:', err.message);
+	}
+};
 
 // Modify response (placeholder for future functionality)
 const modifyResponse = (response) => {
@@ -475,6 +511,9 @@ const processRequest = async (req, res) => {
 				// No personaId, get any available persona
 				persona = await youtubeManager.getPersona();
 			}
+
+				// Save personas to database after creating a new one
+				savePersonasToDatabase();
 			console.log(`Using YouTube persona: ${persona.id} (request #${persona.requestCount + 1})`);
 
 			// Start with forwarded browser headers (if available)
@@ -510,6 +549,9 @@ const processRequest = async (req, res) => {
 		// Update persona with response cookies
 		if (persona) {
 			youtubeManager.updatePersona(persona.id, fullResponse, provider);
+
+				// Save personas to database after any updates
+				savePersonasToDatabase();
 
 			// Log persona status
 			const cookieStatus = persona.getYouTubeCookieStatus();
