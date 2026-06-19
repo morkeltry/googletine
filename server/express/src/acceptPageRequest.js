@@ -514,7 +514,7 @@ const processRequest = async (req, res) => {
 			// Log persona status
 			const cookieStatus = persona.getYouTubeCookieStatus();
 			console.log('Persona cookie status:', {
-				CONSENT: !!cookieStatus.CONSENT,
+				VISITOR_PRIVACY_METADATA: !!cookieStatus.VISITOR_PRIVACY_METADATA,
 				VISITOR_INFO1_LIVE: !!cookieStatus.VISITOR_INFO1_LIVE,
 				YSC: !!cookieStatus.YSC,
 				totalCookies: persona.cookies.size
