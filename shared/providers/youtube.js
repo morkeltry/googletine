@@ -16,7 +16,7 @@ export class YouTubePersona extends Persona {
 
 		// YouTube-specific state
 		this.state = {
-			consentGiven: false,
+			privacyMetadata: null,
 			visitorId: null,
 			sessionId: null,
 			...options.state
@@ -51,9 +51,9 @@ export class YouTubePersona extends Persona {
 	 * Update YouTube-specific state from cookies
 	 */
 	updateYouTubeState() {
-		// Extract CONSENT
-		const consentCookie = this.cookies.get('CONSENT');
-		this.state.consentGiven = !!consentCookie;
+		// Extract VISITOR_PRIVACY_METADATA (replaces CONSENT as of 2026)
+		const privacyCookie = this.cookies.get('VISITOR_PRIVACY_METADATA');
+		this.state.privacyMetadata = privacyCookie?.value || null;
 
 		// Extract VISITOR_INFO1_LIVE
 		const visitorCookie = this.cookies.get('VISITOR_INFO1_LIVE');
@@ -70,12 +70,11 @@ export class YouTubePersona extends Persona {
 	 */
 	getYouTubeCookieStatus() {
 		return {
-			CONSENT: this.cookies.get('CONSENT')?.value || null,
+			VISITOR_PRIVACY_METADATA: this.cookies.get('VISITOR_PRIVACY_METADATA')?.value?.substring(0, 50) || null,
 			VISITOR_INFO1_LIVE: this.cookies.get('VISITOR_INFO1_LIVE')?.value || null,
 			YSC: this.cookies.get('YSC')?.value || null,
 			__Secure_YEC: this.cookies.get('__Secure-YEC')?.value?.substring(0, 50) || null,
-			__Secure_YENID: this.cookies.get('__Secure-YENID')?.value?.substring(0, 50) || null,
-			VISITOR_PRIVACY_METADATA: this.cookies.get('VISITOR_PRIVACY_METADATA')?.value?.substring(0, 50) || null
+			__Secure_YENID: this.cookies.get('__Secure-YENID')?.value?.substring(0, 50) || null
 		};
 	}
 }
@@ -94,12 +93,11 @@ export class YouTubePersonaManager extends PersonaManager {
 
 		// YouTube-specific settings
 		this.cookieNames = [
-			'CONSENT',
+			'VISITOR_PRIVACY_METADATA',
 			'VISITOR_INFO1_LIVE',
 			'YSC',
 			'__Secure-YEC',
 			'__Secure-YENID',
-			'VISITOR_PRIVACY_METADATA',
 			'PREF',
 			'SID',
 			'HSID',
@@ -118,20 +116,11 @@ export class YouTubePersonaManager extends PersonaManager {
 	async createPersona(options = {}) {
 		const persona = new YouTubePersona(options);
 
-		// Set initial consent cookie if not provided
-		if (!persona.cookies.has('CONSENT')) {
-			persona.cookies.set('CONSENT', {
-				name: 'CONSENT',
-				value: 'YES+cb.20240101-17-p0.en+FX+114',
-				attributes: [],
-				domain: '.youtube.com'
-			});
-		}
-
 		this.personas.set(persona.id, persona);
 		this.stats.totalPersonasCreated++;
 
 		// Make initial request to YouTube to accept terms and get proper cookies
+		// YouTube will set VISITOR_PRIVACY_METADATA and other cookies
 		await this.initializePersona(persona);
 
 		return persona;
