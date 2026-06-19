@@ -195,9 +195,31 @@ async function initializeBrowser() {
 }
 
 /**
+ * Normalize URL to ensure it has protocol and valid format
+ */
+function normalizeUrl(url) {
+    if (!url) return 'https://www.youtube.com';
+
+    // If no protocol, prepend https://
+    if (!url.match(/^https?:\/\//i)) {
+        url = 'https://' + url;
+    }
+
+    // If just youtube.com, convert to www.youtube.com
+    if (url.includes('//youtube.com') && !url.includes('//www.')) {
+        url = url.replace('//youtube.com', '//www.youtube.com');
+    }
+
+    return url;
+}
+
+/**
  * Navigate to a URL, wait for content, extract titles, and return DOM
  */
 async function navigateAndRender(url) {
+    // Normalize URL
+    url = normalizeUrl(url);
+
     // Extract search term from URL for naming
     const urlObj = new URL(url);
     const searchParams = new URLSearchParams(urlObj.search);
