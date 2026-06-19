@@ -88,14 +88,51 @@ async function navigateAndWait(url) {
 }
 
 /**
+ * Wait for YouTube search results to load
+ */
+async function waitForSearchResults() {
+    console.log('⏳ Waiting for search results to load...');
+
+    // Wait for key YouTube search result elements
+    try {
+        await page.waitForSelector('ytd-video-renderer, ytd-grid-video-renderer, ytd-rich-item-renderer', {
+            timeout: 10000
+        });
+        console.log('   ✅ Search results loaded');
+    } catch (e) {
+        console.log('   ⚠️ Timeout waiting for results, using fallback...');
+
+        // Fallback: wait for any content
+        await delay(3000);
+
+        // Check if any yt-specific elements are present
+        const hasContent = await page.evaluate(() => {
+            return document.querySelector('ytd-video-renderer') ||
+                   document.querySelector('ytd-grid-video-renderer') ||
+                   document.querySelector('ytd-rich-item-renderer') ||
+                   document.querySelector('ytd-thumbnail') ||
+                   document.body.textContent.length > 1000;
+        });
+
+        if (hasContent) {
+            console.log('   ✅ Content detected');
+        } else {
+            console.log('   ⚠️ Limited content detected');
+        }
+    }
+}
+
+/**
  * Capture the rendered DOM, remove consent elements, fix links, and save to file
  */
 async function captureAndSaveDOM(v, q) {
+    console.log('📄 Capturing rendered DOM...');
+
     const dom = await page.evaluate(() => {
         return document.documentElement.outerHTML;
     });
 
-    console.log(`DOM captured: ${dom.length} bytes`);
+    console.log(`   Captured ${dom.length} bytes of HTML`);
 
     // Fix relative YouTube links to absolute URLs
     let processedDom = dom;
@@ -141,6 +178,27 @@ async function captureAndSaveDOM(v, q) {
 }
 
 /**
+ * Capture cookies from the page
+ */
+async function captureCookies(stepName) {
+    const cookies = await page.cookies();
+    console.log(`🍪 Captured ${cookies.length} cookies (${stepName})`);
+
+    // Log key cookies
+    const keyCookies = ['VISITOR_PRIVACY_METADATA', 'VISITOR_INFO1_LIVE', 'YSC', '__Secure-YEC', '__Secure-YENID', 'SOCS', 'CONSENT'];
+    console.log('   Key cookies:');
+    for (const name of keyCookies) {
+        const cookie = cookies.find(c => c.name === name);
+        if (cookie) {
+            const value = cookie.value.substring(0, 30) + (cookie.value.length > 30 ? '...' : '');
+            console.log(`     ${name}: ${value}`);
+        }
+    }
+
+    return cookies;
+}
+
+/**
  * Universal request function
  * @param {string} v - Video identifier (for naming saved files)
  * @param {string} q - Search term
@@ -152,18 +210,51 @@ async function processYouTubeRequest(v, q, waitMs = 0) {
         await delay(waitMs);
     }
 
-    console.log(`=== PROCESSING: ${v} (search: "${q}") ===\n`);
+    console.log(`🔎 Processing: ${v} (search: "${q}")`);
 
-    await navigateAndWait(`https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`);
+    try {
+        // Step 1: Navigate to YouTube homepage
+        console.log('   1. Navigating to YouTube homepage...');
+        await page.goto('https://www.youtube.com', {
+            waitUntil: 'domcontentloaded',
+            timeout: 30000
+        });
 
-    const titles = await extractVideoTitles();
-    console.log('\n=== VIDEO TITLES ===');
-    titles.forEach((title, i) => {
-        console.log(`${i + 1}. ${title}`);
-    });
-    console.log('====================\n');
+        // Step 2: Check for consent dialog (already handled during init, but check again)
+        console.log('   2. Checking for consent dialog...');
+        await handleConsent();
 
-    return await captureAndSaveDOM(v, q);
+        // Step 3: Navigate to search results
+        const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
+        console.log(`   3. Navigating to search: ${searchUrl}`);
+        await page.goto(searchUrl, {
+            waitUntil: 'domcontentloaded',
+            timeout: 30000
+        });
+
+        // Step 4: Wait for content to load
+        console.log('   4. Waiting for content to load...');
+        await waitForSearchResults();
+
+        // Step 5: Capture cookies and DOM
+        console.log('   5. Capturing cookies and DOM...');
+        await captureCookies(q);
+        const titles = await extractVideoTitles();
+        console.log('\n   === VIDEO TITLES ===');
+        titles.forEach((title, i) => {
+            console.log(`   ${i + 1}. ${title}`);
+        });
+        console.log('   ===================\n');
+
+        const dom = await captureAndSaveDOM(v, q);
+
+        console.log(`✅ Complete: ${v} - ${dom.length} bytes\n`);
+        return dom;
+
+    } catch (error) {
+        console.error(`❌ Error processing "${q}": ${error.message}\n`);
+        throw error;
+    }
 }
 
 /**
@@ -224,6 +315,7 @@ async function handleConsent() {
  * Initialize browser
  */
 async function initializeBrowser() {
+    console.log('🚀 Launching browser...\n');
     console.log('=== INITIALIZING BROWSER ===\n');
 
     browser = await puppeteer.launch({
@@ -236,13 +328,14 @@ async function initializeBrowser() {
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
 
     // Navigate to YouTube homepage first to establish session
-    console.log('Navigating to YouTube homepage...');
+    console.log('📍 Navigating to YouTube homepage...\n');
     await page.goto('https://www.youtube.com', {
         waitUntil: 'networkidle2',
         timeout: 30000
     });
 
     // Handle consent dialog
+    console.log('🔍 Checking for consent dialog...');
     await handleConsent();
 
     // Wait for content to load
@@ -260,6 +353,8 @@ async function initializeBrowser() {
  * Navigate to a URL, wait for content, extract titles, and return DOM
  */
 async function navigateAndRender(url) {
+    console.log(`\n📋 Processing request for: ${url}`);
+
     // Extract search term from URL for naming
     const urlObj = new URL(url);
     const searchParams = new URLSearchParams(urlObj.search);
@@ -280,18 +375,18 @@ async function navigateAndRender(url) {
 // Request endpoint - returns rendered YouTube page
 app.get('/request', async (req, res) => {
     const url = req.query.url || 'https://www.youtube.com';
-    console.log(`[${new Date().toISOString()}] Processing request for: ${url}`);
+    console.log(`[${new Date().toISOString()}] 📥 Received request for: ${url}`);
 
     try {
         const dom = await navigateAndRender(url);
 
         res.setHeader('Content-Type', 'text/html');
         res.send(dom);
-        console.log(`[${new Date().toISOString()}] ✓ Success: ${dom.length} bytes`);
+        console.log(`[${new Date().toISOString()}] ✅ Success: ${dom.length} bytes\n`);
 
     } catch (error) {
         res.status(500).json({ error: error.message });
-        console.log(`[${new Date().toISOString()}] ✗ Error: ${error.message}`);
+        console.log(`[${new Date().toISOString()}] ❌ Error: ${error.message}\n`);
     }
 });
 
@@ -310,14 +405,17 @@ async function startServer() {
     await initializeBrowser();
 
     app.listen(PORT, () => {
+        console.log('========================================');
         console.log(`YouTube DOM Server listening on port ${PORT}`);
+        console.log('========================================');
         console.log(`GET  http://localhost:${PORT}/request?url=<youtube-url>`);
         console.log(`GET  http://localhost:${PORT}/health`);
         console.log(`Output directory: ${OUTPUT_DIR}`);
+        console.log('========================================\n');
     });
 }
 
 startServer().catch(err => {
-    console.error('Failed to start server:', err);
+    console.error('❌ Failed to start server:', err);
     process.exit(1);
 });
